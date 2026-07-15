@@ -1,0 +1,1286 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GymProgress - Ultimate Custom Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white font-sans antialiased pb-24">
+
+    <header class="bg-gray-800 p-4 sticky top-0 z-50 border-b border-gray-700 shadow-md">
+        <div class="flex justify-between items-center max-w-md mx-auto">
+            <h1 class="text-xl font-bold text-indigo-400">💪 GymProgress Pro</h1>
+            <span id="date-display" class="text-xs text-gray-400"></span>
+        </div>
+    </header>
+
+    <main class="max-w-md mx-auto p-4">
+        
+        <div id="tab-workout" class="tab-content active">
+            <h2 class="text-2xl font-bold mb-4">Workout</h2>
+            
+            <div id="next-day-badge" class="bg-gray-800/80 border border-indigo-500/30 p-3 rounded-xl text-xs mb-3 text-gray-300 flex justify-between items-center">
+                <span>⏮️ Ultimo fatto: <strong class="text-indigo-400" id="last-done-day-name">Nessuno</strong></span>
+                <span class="bg-indigo-900/60 text-indigo-200 px-2.5 py-1 rounded-md text-[10px] font-bold">PROSSIMO SUGGERITO</span>
+            </div>
+            
+            <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow mb-4 space-y-3">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label for="workout-week-select" class="block text-xs text-gray-400 mb-1">Fase / Settimana</label>
+                        <select id="workout-week-select" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-xs font-semibold" onchange="loadPlannedExercises()">
+                        </select>
+                    </div>
+                    <div>
+                        <label for="workout-day-select" class="block text-xs text-gray-400 mb-1">Seleziona Giorno</label>
+                        <select id="workout-day-select" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-xs font-semibold" onchange="loadPlannedExercises()">
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div id="workout-flow" class="space-y-4">
+                <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow">
+                    <label for="active-exercise-select" class="block text-sm font-medium text-gray-400 mb-2">Seleziona Esercizio</label>
+                    <select id="active-exercise-select" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2.5 text-white" onchange="startExerciseSession()">
+                    </select>
+                </div>
+
+                <div id="target-box" class="bg-indigo-950/50 border border-indigo-800 p-4 rounded-xl">
+                    </div>
+
+                <div id="inputs-container" class="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow">
+                    </div>
+
+                <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow">
+                    <h3 class="font-semibold mb-2 text-gray-200 text-sm">Serie registrate adesso:</h3>
+                    <div id="current-sets-list" class="space-y-2 mb-4"></div>
+                    <button onclick="saveCurrentWorkoutSession()" id="btn-complete-workout" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg transition-colors">
+                        ✅ Esercizio Completato
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-plan" class="tab-content">
+            <h2 class="text-2xl font-bold mb-4">Pianifica Programma</h2>
+            
+            <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow mb-4 space-y-3">
+                <h3 class="font-semibold text-sm text-indigo-400 flex items-center gap-1.5">📦 Archivio & Salva Programmi</h3>
+                <p class="text-[11px] text-gray-400">Salva il programma attuale per non perderlo, oppure ricarica un vecchio piano salvato in prevenzione.</p>
+                <div class="flex gap-2">
+                    <label for="archive-name-input" class="sr-only">Nome salvataggio</label>
+                    <input type="text" id="archive-name-input" placeholder="Nome salvataggio (es. Scheda Forza A)" class="flex-1 bg-gray-700 border border-gray-600 rounded-lg p-2 text-xs text-white">
+                    <button onclick="archiveCurrentPlan()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 rounded-lg text-xs transition-colors">
+                        Salva Corrente
+                    </button>
+                </div>
+                <div id="archived-list-container" class="space-y-1.5 pt-2 max-h-40 overflow-y-auto"></div>
+            </div>
+            
+            <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow mb-4 space-y-3">
+                <h3 class="font-semibold text-sm text-indigo-400 flex items-center gap-1.5">⚙️ Configurazione Regole</h3>
+                <div class="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                        <label for="global-plan-type" class="block text-gray-400 mb-1">Modello di Progressione</label>
+                        <select id="global-plan-type" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white font-bold" onchange="changeGlobalPlanType()">
+                            <option value="brunaccioni">Protocollo Brunaccioni (9 Sett.)</option>
+                            <option value="custom">Progressione Personalizzata</option>
+                        </select>
+                    </div>
+                    <div id="custom-weeks-container" class="hidden">
+                        <label for="global-custom-weeks" class="block text-gray-400 mb-1">Durata Ciclo (Settimane)</label>
+                        <input type="number" id="global-custom-weeks" min="1" max="16" value="4" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white font-bold" onchange="changeCustomWeeksCount()">
+                    </div>
+                </div>
+                <button onclick="createNewEmptyPlan()" class="w-full bg-gray-700 border border-dashed border-gray-500 hover:bg-gray-600 text-gray-300 text-xs py-2 rounded-lg font-medium transition-colors">
+                    ➕ Crea Nuovo Programma Vuoto (Pulisce Attuale)
+                </button>
+            </div>
+
+            <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow mb-4">
+                <h3 class="font-semibold mb-2 text-sm text-gray-300">1. Aggiungi Nuovo Giorno / Blocco</h3>
+                <div class="flex gap-2">
+                    <label for="new-day-name" class="sr-only">Nome Nuovo Giorno</label>
+                    <input type="text" id="new-day-name" placeholder="es. Giorno 3: Gambe" class="flex-1 bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-sm">
+                    <button onclick="addNewDay()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 rounded-lg text-sm transition-colors">
+                        + Crea
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow mb-6 animate-fade-in">
+                <h3 class="font-semibold mb-3 text-sm text-indigo-400" id="form-exercise-title">2. Aggiungi Esercizio alla Scheda</h3>
+                <div class="space-y-3 text-sm">
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label for="plan-day-select" class="block text-xs text-gray-400 mb-1">In quale Giorno?</label>
+                            <select id="plan-day-select" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white" onchange="populateSuperSetSelect()"></select>
+                        </div>
+                        <div>
+                            <label for="plan-exercise-name" class="block text-xs text-gray-400 mb-1">Nome Esercizio</label>
+                            <input type="text" id="plan-exercise-name" placeholder="es. Panca Piana" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div>
+                            <label for="plan-sets" class="block text-xs text-gray-400 mb-1">Serie Base</label>
+                            <input type="number" id="plan-sets" value="4" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white" oninput="updateWeeklyInputsRealtime()">
+                        </div>
+                        <div>
+                            <label for="plan-reps" class="block text-xs text-gray-400 mb-1">Rep Base</label>
+                            <input type="number" id="plan-reps" value="10" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white" oninput="updateWeeklyInputsRealtime()">
+                        </div>
+                        <div>
+                            <label for="plan-weight" class="block text-xs text-gray-400 mb-1">Peso Base (kg)</label>
+                            <input type="number" id="plan-weight" value="0" step="0.1" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white" oninput="updateWeeklyInputsRealtime()">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label for="plan-progression" class="block text-xs text-gray-400 mb-1">Tipo Progressione</label>
+                            <select id="plan-progression" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white" onchange="toggleStepInputVisibility()">
+                            </select>
+                        </div>
+                        <div id="step-increment-container" class="hidden">
+                            <label for="plan-step" class="block text-xs text-gray-400 mb-1">Incr. kg a settimana</label>
+                            <input type="number" id="plan-step" value="2.5" step="0.5" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white">
+                        </div>
+                        <div class="col-span-2">
+                            <label for="plan-superset-select" class="block text-xs text-gray-400 mb-1">🔗 Collega in Super Serie (SS)</label>
+                            <select id="plan-superset-select" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white">
+                                <option value="">-- Nessuna Super Serie --</option>
+                            </select>
+                        </div>
+                        <div id="generic-note-container" class="col-span-2">
+                            <label for="plan-note" class="block text-xs text-gray-400 mb-1">Nota Logistica / Posizione</label>
+                            <input type="text" id="plan-note" placeholder="es. Zona Cavi / Panca 30°" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white">
+                        </div>
+                    </div>
+
+                    <div id="weekly-table-container" class="hidden bg-gray-900/60 p-3.5 rounded-lg border border-gray-700 space-y-2.5 col-span-2">
+                        <div class="flex justify-between items-center mb-1">
+                            <h4 class="text-xs font-bold text-indigo-400 flex items-center gap-1">✍️ Target per Settimana</h4>
+                            <button type="button" onclick="syncWeeklyWithBase()" class="text-[10px] text-indigo-300 hover:text-indigo-200 underline font-semibold transition-colors">
+                                🔄 Sincronizza con i valori base
+                            </button>
+                        </div>
+                        <div id="weekly-rows" class="space-y-1.5 max-h-56 overflow-y-auto pr-1"></div>
+                    </div>
+
+                    <div class="flex gap-2 pt-2">
+                        <button onclick="saveExerciseFromForm()" id="btn-save-exercise" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-lg transition-colors">
+                            Salva Esercizio
+                        </button>
+                        <button onclick="cancelResetForm()" id="btn-cancel-edit" class="bg-gray-700 hover:bg-gray-600 text-gray-300 font-medium px-3 rounded-lg hidden">
+                            Annulla
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-4" id="plan-preview-container"></div>
+        </div>
+
+        <div id="tab-analytics" class="tab-content">
+            <h2 class="text-2xl font-bold mb-4">Analisi Volume</h2>
+            
+            <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow mb-4 space-y-3">
+                <label for="chart-exercise-select" class="block text-sm font-medium text-gray-300">Seleziona Esercizio da Monitorare</label>
+                <select id="chart-exercise-select" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2.5 text-white" onchange="buildVolumeChart()">
+                </select>
+            </div>
+
+            <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow relative h-80">
+                <div id="chart-empty-msg" class="absolute inset-0 flex items-center justify-center text-gray-500 text-sm p-4 text-center hidden">
+                    Nessun dato registrato per questo esercizio nel programma attuale. Esegui e salva i tuoi allenamenti!
+                </div>
+                <canvas id="volumeChart"></canvas>
+            </div>
+            <p class="text-[11px] text-gray-400 mt-2 px-1">💡 Il grafico calcola il <strong>Tonnellaggio Totale</strong> (Somma di: Peso × Reps per ogni serie completata) per tracciare la progressione lineare del volume.</p>
+        </div>
+
+        <div id="tab-history" class="tab-content">
+            <h2 class="text-2xl font-bold mb-4">Impostazioni & Storico</h2>
+            
+            <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow mb-4 space-y-3">
+                <h3 class="text-sm font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">💾 Backup & Trasferimento Dati</h3>
+                <p class="text-[11px] text-gray-400">Scarica tutti i tuoi dati (schede attive, schede archiviate e grafici storici) in un file unico, oppure ricaricalo se cambi telefono.</p>
+                
+                <div class="grid grid-cols-2 gap-2 pt-1">
+                    <button onclick="exportDataBackup()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-3 rounded-lg text-xs transition-colors flex justify-center items-center gap-1">
+                        📥 Esporta Backup
+                    </button>
+                    
+                    <label for="import-file-input" class="bg-gray-700 hover:bg-gray-600 text-gray-200 font-bold py-2.5 px-3 rounded-lg text-xs transition-colors flex justify-center items-center gap-1 cursor-pointer text-center">
+                        📤 Importa Backup
+                        <input type="file" id="import-file-input" accept=".json" class="hidden" onchange="importDataBackup(event)">
+                    </label>
+                </div>
+            </div>
+            
+            <div class="bg-red-950/40 border border-red-900/60 p-4 rounded-xl mb-6 space-y-3 shadow-md">
+                <h3 class="text-sm font-bold text-red-400 uppercase tracking-wider flex items-center gap-2">⚠️ Zona Pericolo</h3>
+                <div class="grid grid-cols-2 gap-2 pt-1">
+                    <button onclick="clearHistoryOnly()" class="bg-red-900/60 hover:bg-red-800 text-red-200 font-medium py-2 px-3 rounded-lg text-xs border border-red-700/50 transition-colors">
+                        🗑️ Svuota Solo Grafici/Storico
+                    </button>
+                    <button onclick="fullAppReset()" class="bg-red-700 hover:bg-red-600 text-white font-bold py-2 px-3 rounded-lg text-xs transition-colors">
+                        💥 Reset Totale Fabbrica
+                    </button>
+                </div>
+            </div>
+
+            <div id="history-container" class="space-y-4"></div>
+        </div>
+    </main>
+
+    <nav class="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 p-2 z-50 shadow-lg">
+        <div class="max-w-md mx-auto grid grid-cols-4 justify-items-center">
+            <button onclick="switchTab('workout')" id="nav-workout" class="flex flex-col items-center p-1 text-indigo-400 text-[10px] font-semibold">
+                <span class="text-base">🏋️‍♂️</span><span>Workout</span>
+            </button>
+            <button onclick="switchTab('plan')" id="nav-plan" class="flex flex-col items-center p-1 text-gray-400 text-[10px]">
+                <span class="text-base">📅</span><span>Programma</span>
+            </button>
+            <button onclick="switchTab('analytics')" id="nav-analytics" class="flex flex-col items-center p-1 text-gray-400 text-[10px]">
+                <span class="text-base">📊</span><span>Analisi</span>
+            </button>
+            <button onclick="switchTab('history')" id="nav-history" class="flex flex-col items-center p-1 text-gray-400 text-[10px]">
+                <span class="text-base">📜</span><span>Impostazioni</span>
+            </button>
+        </div>
+    </nav>
+
+    <script>
+		// Database pre-caricato completo (Esercizi reali di esempio)
+		const initialPlan = {
+			days: [
+				{
+					name: "Giorno 1: Spinta (Petto/Spalle/Tricipiti)",
+					exercises: [
+						{ name: "Panca Piana Manubri", sets: 4, reps: 8, weight: 24, progression: "brunaccioni", step: 0, note: "Panca 30°", superSetWith: "" },
+						{ name: "Shoulder Press", sets: 4, reps: 10, weight: 16, progression: "brunaccioni", step: 0, note: "Manubri", superSetWith: "" },
+						{ name: "Croci ai cavi alti", sets: 3, reps: 12, weight: 15, progression: "statico", step: 0, note: "Area Cavi", superSetWith: "" },
+						{ name: "French Press", sets: 3, reps: 10, weight: 20, progression: "statico", step: 0, note: "Bilanciere EZ", superSetWith: "" }
+					]
+				},
+				{
+					name: "Giorno 2: Trazione (Dorso/Bicipiti)",
+					exercises: [
+						{ name: "Lat Machine Prona", sets: 4, reps: 10, weight: 50, progression: "brunaccioni", step: 0, note: "Tirata Verticale", superSetWith: "" },
+						{ name: "Pulley Basso", sets: 4, reps: 8, weight: 45, progression: "brunaccioni", step: 0, note: "Tirata Orizzontale", superSetWith: "" },
+						{ name: "Alzate Laterali", sets: 3, reps: 12, weight: 8, progression: "statico", step: 0, note: "Manubri", superSetWith: "" },
+						{ name: "Curl Alternato Manubri", sets: 3, reps: 10, weight: 12, progression: "statico", step: 0, note: "Seduto", superSetWith: "" }
+					]
+				}
+			]
+		};
+
+		// Inizializzazione Database globale
+		let db = {
+			history: JSON.parse(localStorage.getItem('gym_history_v5')) || [],
+			last_day_index: localStorage.getItem('gym_last_day_index_v5') !== null ? parseInt(localStorage.getItem('gym_last_day_index_v5')) : -1,
+			planType: localStorage.getItem('gym_plan_type_v5') || "brunaccioni", 
+			customWeeks: localStorage.getItem('gym_custom_weeks_v5') !== null ? parseInt(localStorage.getItem('gym_custom_weeks_v5')) : 4,
+			plan: JSON.parse(localStorage.getItem('gym_plan_v5')) || JSON.parse(JSON.stringify(initialPlan)),
+			archives: JSON.parse(localStorage.getItem('gym_archives_v5')) || []
+		};
+		
+		let currentSessionSets = [];
+		let currentEditState = { dayIdx: null, exIdx: null };
+		let volumeChartInstance = null;
+
+		function saveData() {
+			localStorage.setItem('gym_history_v5', JSON.stringify(db.history));
+			localStorage.setItem('gym_last_day_index_v5', db.last_day_index);
+			localStorage.setItem('gym_plan_type_v5', db.planType);
+			localStorage.setItem('gym_custom_weeks_v5', db.customWeeks);
+			localStorage.setItem('gym_plan_v5', JSON.stringify(db.plan));
+			localStorage.setItem('gym_archives_v5', JSON.stringify(db.archives));
+		}
+
+		function switchTab(tabId) {
+			document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+			document.getElementById(`tab-${tabId}`).classList.add('active');
+			
+			document.querySelectorAll('nav button').forEach(btn => {
+				btn.classList.remove('text-indigo-400', 'font-semibold');
+				btn.classList.add('text-gray-400');
+			});
+			const activeBtn = document.getElementById(`nav-${tabId}`);
+			if (activeBtn) {
+				activeBtn.classList.remove('text-gray-400');
+				activeBtn.classList.add('text-indigo-400', 'font-semibold');
+			}
+
+			if(tabId === 'workout') renderWorkoutSelectors();
+			if(tabId === 'plan') {
+				initPlanFormSettings();
+				renderPlanTab();
+				renderArchivesList();
+			}
+			if(tabId === 'analytics') {
+				populateChartExerciseSelector();
+				buildVolumeChart();
+			}
+			if(tabId === 'history') renderHistory();
+		}
+
+		// --- MOTORE DELLE PROGRESSIONI MATEMATICHE ---
+		function getCalculatedTarget(ex, week) {
+			let sets = ex.sets;
+			let reps = ex.reps;
+			let weight = ex.weight;
+			let label = "Costante";
+
+			if (db.planType === "brunaccioni") {
+				if (ex.progression !== "brunaccioni") return { sets, reps, weight, label: "Statico" };
+				switch(parseInt(week)) {
+					case 1: label = "Base (RIR 1-2)"; break;
+					case 2: sets = ex.sets + 1; label = "Vol + (Serie +1)"; break;
+					case 3: reps = ex.reps + 1; label = "Reps + (Ripetizione +1)"; break;
+					case 4: sets = ex.sets + 1; reps = ex.reps + 1; label = "Consolidamento Vol++"; break;
+					case 5: reps = ex.reps - 1; weight = Math.round(ex.weight * 1.05 * 2) / 2; label = "Carico +5% (-1 rep)"; break;
+					case 6: sets = ex.sets + 1; reps = ex.reps - 1; weight = Math.round(ex.weight * 1.05 * 2) / 2; label = "Vol+ col nuovo peso"; break;
+					case 7: weight = Math.round(ex.weight * 1.05 * 2) / 2; label = "Reps+ col nuovo peso"; break;
+					case 8: sets = ex.sets + 1; weight = Math.round(ex.weight * 1.05 * 2) / 2; label = "Max Vol col nuovo peso"; break;
+					case 9: reps = ex.reps - 2; weight = Math.round(ex.weight * 1.10 * 2) / 2; label = "Reset & Carico ++10%"; break;
+				}
+				return { sets, reps, weight, label };
+			}
+
+			const w = parseInt(week);
+			if (ex.progression === "linear_weight") {
+				const inc = ex.step !== undefined ? ex.step : 2.5;
+				weight = ex.weight + ((w - 1) * inc);
+				label = `Incr. Lineare (+${inc}kg/W)`;
+			} else if (ex.progression === "linear_reps") {
+				reps = ex.reps + (w - 1);
+				label = "Incr. Ripetizioni (+1 rep/W)";
+			} else if (ex.progression === "custom_table") {
+				if (ex.weeklyTargets && ex.weeklyTargets[w - 1]) {
+					const target = ex.weeklyTargets[w - 1];
+					return { sets: target.sets, reps: target.reps, weight: target.weight, label: `Prog. Pers. Sett. ${w}` };
+				}
+				label = "Prog. Pers. (Vuoto)";
+			} else if (ex.progression === "libera") {
+				label = "Gestione Libera";
+			}
+			return { sets, reps, weight, label };
+		}
+
+		// --- TAB 1: ALLENAMENTO ---
+		function generateWeeksDropdown() {
+			const weekSelect = document.getElementById('workout-week-select');
+			if (!weekSelect) return;
+			let optionsHtml = "";
+			if (db.planType === "brunaccioni") {
+				const labels = ["S1 (Base)", "S2 (Vol+)", "S3 (Rep+)", "S4 (Vol++)", "S5 (Peso+ 5%)", "S6 (Vol+)", "S7 (Rep+)", "S8 (Vol++)", "S9 (Reset & Peso++)"];
+				optionsHtml = labels.map((l, i) => `<option value="${i+1}">${l}</option>`).join('');
+			} else {
+				for (let i = 1; i <= db.customWeeks; i++) {
+					optionsHtml += `<option value="${i}">Settimana ${i}</option>`;
+				}
+			}
+			weekSelect.innerHTML = optionsHtml;
+		}
+
+		function renderWorkoutSelectors() {
+			generateWeeksDropdown();
+			const daySelect = document.getElementById('workout-day-select');
+			if (!daySelect) return;
+			
+			if (db.plan.days.length === 0) {
+				daySelect.innerHTML = `<option value="">Nessun giorno presente</option>`;
+				document.getElementById('workout-flow')?.classList.add('hidden');
+				return;
+			}
+			document.getElementById('workout-flow')?.classList.remove('hidden');
+			daySelect.innerHTML = db.plan.days.map((day, idx) => `<option value="${idx}">${day.name.split(":")[0]}</option>`).join('');
+			
+			if (db.last_day_index !== -1 && db.last_day_index < db.plan.days.length) {
+				daySelect.value = (db.last_day_index + 1) % db.plan.days.length;
+			} else {
+				daySelect.value = 0;
+			}
+			updateLastDoneBadge();
+			loadPlannedExercises();
+		}
+
+		function updateLastDoneBadge() {
+			const badgeText = document.getElementById('last-done-day-name');
+			if (!badgeText) return;
+			if (db.last_day_index !== -1 && db.plan.days[db.last_day_index]) {
+				badgeText.innerText = db.plan.days[db.last_day_index].name.split(":")[0];
+			} else {
+				badgeText.innerText = "Nessuno";
+			}
+		}
+
+		function loadPlannedExercises() {
+			const dayIdx = document.getElementById('workout-day-select').value;
+			const activeExSelect = document.getElementById('active-exercise-select');
+			if (!activeExSelect) return;
+
+			if(dayIdx === "" || !db.plan.days[dayIdx] || db.plan.days[dayIdx].exercises.length === 0) {
+				activeExSelect.innerHTML = `<option value="">Nessun esercizio presente</option>`;
+				document.getElementById('target-box')?.classList.add('hidden');
+				return;
+			}
+			document.getElementById('target-box')?.classList.remove('hidden');
+			activeExSelect.innerHTML = db.plan.days[dayIdx].exercises.map((ex, idx) => `<option value="${idx}">${ex.name}</option>`).join('');
+			startExerciseSession();
+		}
+
+		function startExerciseSession() {
+			const dayIdx = document.getElementById('workout-day-select').value;
+			const exIdx = document.getElementById('active-exercise-select').value;
+			const week = parseInt(document.getElementById('workout-week-select').value);
+			if(dayIdx === "" || exIdx === "" || !db.plan.days[dayIdx] || !db.plan.days[dayIdx].exercises[exIdx]) return;
+
+			const ex = db.plan.days[dayIdx].exercises[exIdx];
+			const target = getCalculatedTarget(ex, week);
+
+			// Ricerca dell'eventuale esercizio accoppiato in Super Serie (SS)
+			const partnerName = ex.superSetWith;
+			let partnerEx = null;
+			let partnerTarget = null;
+			if (partnerName) {
+				partnerEx = db.plan.days[dayIdx].exercises.find(e => e.name === partnerName);
+				if (partnerEx) {
+					partnerTarget = getCalculatedTarget(partnerEx, week);
+				}
+			}
+
+			const targetBox = document.getElementById('target-box');
+			if (!targetBox) return;
+
+			const isSuperSet = partnerEx && partnerTarget;
+
+			// Rendering del Target Box (Differenziato per Super Set)
+			if (isSuperSet) {
+				targetBox.innerHTML = `
+					<div class="space-y-3">
+						<div class="flex justify-between items-center border-b border-indigo-800 pb-1.5">
+							<span class="text-xs font-bold text-indigo-400 uppercase tracking-wider">🔗 SUPER SET ATTIVO (A + B)</span>
+							<span class="text-[9px] bg-purple-900 text-purple-200 px-1.5 py-0.5 rounded font-bold uppercase">SUPER SET</span>
+						</div>
+						<div>
+							<div class="flex justify-between items-center text-[10px] text-gray-400">
+								<span>Esercizio A: <strong>${ex.name}</strong></span>
+								<span class="bg-indigo-900/60 text-indigo-300 px-1.5 py-0.5 rounded font-semibold uppercase text-[8px]">${target.label}</span>
+							</div>
+							<p class="text-base font-bold text-indigo-200">${target.sets} set x ${target.reps} rep @ ${target.weight} kg</p>
+							${ex.note ? `<p class="text-[11px] text-amber-400 italic mt-0.5">📝 Nota: ${ex.note}</p>` : ''}
+						</div>
+						<div class="border-t border-indigo-900/40 pt-2">
+							<div class="flex justify-between items-center text-[10px] text-gray-400">
+								<span>Esercizio B: <strong>${partnerEx.name}</strong></span>
+								<span class="bg-indigo-900/60 text-indigo-300 px-1.5 py-0.5 rounded font-semibold uppercase text-[8px]">${partnerTarget.label}</span>
+							</div>
+							<p class="text-base font-bold text-indigo-200">${partnerTarget.sets} set x ${partnerTarget.reps} rep @ ${partnerTarget.weight} kg</p>
+							${partnerEx.note ? `<p class="text-[11px] text-amber-400 italic mt-0.5">📝 Nota: ${partnerEx.note}</p>` : ''}
+						</div>
+					</div>
+				`;
+			} else {
+				targetBox.innerHTML = `
+					<div>
+						<div class="flex justify-between items-center mb-1">
+							<span class="text-xs font-semibold text-indigo-400 uppercase tracking-wider">🎯 Target Programmato:</span>
+							<span id="target-type-badge" class="text-[9px] bg-indigo-900 text-indigo-200 px-1.5 py-0.5 rounded font-bold uppercase">${target.label}</span>
+						</div>
+						<p id="target-text" class="text-lg font-bold text-indigo-200">${target.sets} serie x ${target.reps} rep @ ${target.weight} kg</p>
+						<p id="target-note" class="text-xs text-amber-400 mt-1.5 italic ${ex.note ? '' : 'hidden'}">${ex.note ? '📝 Nota: ' + ex.note : ''}</p>
+					</div>
+				`;
+			}
+
+			// Rendering dinamico dei campi di inserimento nel logger (Singolo o Doppio per SS)
+			const inputsContainer = document.getElementById('inputs-container');
+			if (!inputsContainer) return;
+
+			if (isSuperSet) {
+				inputsContainer.innerHTML = `
+					<h3 class="font-semibold mb-3 text-gray-200" id="set-counter-title">Registra Super Serie - Giro 1</h3>
+					<div class="space-y-4">
+						<div class="p-3 bg-gray-900/40 rounded-lg border border-indigo-950">
+							<p class="text-xs font-bold text-indigo-400 mb-2">A: ${ex.name}</p>
+							<div class="grid grid-cols-2 gap-3">
+								<div>
+									<label for="input-weight" class="block text-[10px] text-gray-400 mb-1">Carico (kg)</label>
+									<input type="number" id="input-weight" step="0.5" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-xs">
+								</div>
+								<div>
+									<label for="input-reps" class="block text-[10px] text-gray-400 mb-1">Ripetizioni</label>
+									<input type="number" id="input-reps" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-xs">
+								</div>
+							</div>
+						</div>
+						
+						<div class="p-3 bg-gray-900/40 rounded-lg border border-purple-950">
+							<p class="text-xs font-bold text-purple-400 mb-2">B: ${partnerEx.name}</p>
+							<div class="grid grid-cols-2 gap-3">
+								<div>
+									<label for="input-weight-partner" class="block text-[10px] text-gray-400 mb-1">Carico (kg)</label>
+									<input type="number" id="input-weight-partner" step="0.5" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-xs">
+								</div>
+								<div>
+									<label for="input-reps-partner" class="block text-[10px] text-gray-400 mb-1">Ripetizioni</label>
+									<input type="number" id="input-reps-partner" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-xs">
+								</div>
+							</div>
+						</div>
+					</div>
+					<button onclick="addSetToCurrentWorkout()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-lg transition-colors mt-3">
+						💾 Salva Giro Super Serie
+					</button>
+				`;
+				document.getElementById('input-weight').value = target.weight;
+				document.getElementById('input-reps').value = target.reps;
+				document.getElementById('input-weight-partner').value = partnerTarget.weight;
+				document.getElementById('input-reps-partner').value = partnerTarget.reps;
+			} else {
+				inputsContainer.innerHTML = `
+					<h3 class="font-semibold mb-3 text-gray-200" id="set-counter-title">Registra Serie 1</h3>
+					<div class="grid grid-cols-2 gap-3 mb-3">
+						<div>
+							<label for="input-weight" class="block text-xs text-gray-400 mb-1">Carico Effettivo (kg)</label>
+							<input type="number" id="input-weight" step="0.5" placeholder="es. 60" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white">
+						</div>
+						<div>
+							<label for="input-reps" class="block text-xs text-gray-400 mb-1">Ripetizioni Fatte</label>
+							<input type="number" id="input-reps" placeholder="es. 10" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white">
+						</div>
+					</div>
+					<button onclick="addSetToCurrentWorkout()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-lg transition-colors">
+						💾 Salva Serie
+					</button>
+				`;
+				document.getElementById('input-weight').value = target.weight;
+				document.getElementById('input-reps').value = target.reps;
+			}
+
+			const completeBtn = document.getElementById('btn-complete-workout');
+			if (completeBtn) {
+				completeBtn.innerText = isSuperSet ? "✅ Super Serie Completata" : "✅ Esercizio Completato";
+			}
+
+			currentSessionSets = [];
+			renderCurrentSets();
+			updateSetCounter();
+		}
+
+		function updateSetCounter() {
+			const title = document.getElementById('set-counter-title');
+			if (!title) return;
+			const isSuperSet = !!document.getElementById('input-weight-partner');
+			if (isSuperSet) {
+				title.innerText = `Registra Super Serie - Giro ${currentSessionSets.length + 1}`;
+			} else {
+				title.innerText = `Registra Serie ${currentSessionSets.length + 1}`;
+			}
+		}
+
+		function addSetToCurrentWorkout() {
+			const dayIdx = document.getElementById('workout-day-select').value;
+			const exIdx = document.getElementById('active-exercise-select').value;
+			if(dayIdx === "" || exIdx === "" || !db.plan.days[dayIdx] || !db.plan.days[dayIdx].exercises[exIdx]) {
+				return alert('Seleziona un esercizio valido prima di registrare una serie.');
+			}
+			
+			const isSuperSet = !!document.getElementById('input-weight-partner');
+
+			if (isSuperSet) {
+				const wA = document.getElementById('input-weight').value;
+				const rA = document.getElementById('input-reps').value;
+				const wB = document.getElementById('input-weight-partner').value;
+				const rB = document.getElementById('input-reps-partner').value;
+
+				if (!wA || !rA || !wB || !rB) return alert('Inserisci dati validi per entrambi gli esercizi.');
+
+				currentSessionSets.push({
+					exA: { weight: parseFloat(wA), reps: parseInt(rA) },
+					exB: { weight: parseFloat(wB), reps: parseInt(rB) }
+				});
+			} else {
+				const weight = document.getElementById('input-weight').value;
+				const reps = document.getElementById('input-reps').value;
+				if(!weight || !reps) return alert('Inserisci dati validi');
+				
+				currentSessionSets.push({ weight: parseFloat(weight), reps: parseInt(reps) });
+			}
+
+			renderCurrentSets();
+			updateSetCounter();
+		}
+
+		function renderCurrentSets() {
+			const container = document.getElementById('current-sets-list');
+			if (!container) return;
+			
+			const isSuperSet = !!document.getElementById('input-weight-partner');
+
+			if (isSuperSet) {
+				container.innerHTML = currentSessionSets.map((set, i) => `
+					<div class="bg-gray-700/80 border border-indigo-950 p-2.5 rounded text-xs space-y-1">
+						<div class="font-bold text-gray-300">Giro ${i + 1}</div>
+						<div class="flex justify-between">
+							<span class="text-indigo-300">A: ${set.exA.weight} kg x ${set.exA.reps} rep</span>
+							<span class="text-purple-300">B: ${set.exB.weight} kg x ${set.exB.reps} rep</span>
+						</div>
+					</div>
+				`).join('');
+			} else {
+				container.innerHTML = currentSessionSets.map((set, i) => `
+					<div class="flex justify-between bg-gray-700 p-2 rounded text-sm">
+						<span>Serie ${i + 1}</span><span class="font-bold text-indigo-400">${set.weight} kg x ${set.reps} rep</span>
+					</div>
+				`).join('');
+			}
+		}
+
+		function saveCurrentWorkoutSession() {
+			const dayIdx = document.getElementById('workout-day-select').value;
+			const exIdx = document.getElementById('active-exercise-select').value;
+			const week = document.getElementById('workout-week-select').value;
+			if(dayIdx === "" || exIdx === "" || !db.plan.days[dayIdx] || !db.plan.days[dayIdx].exercises[exIdx]) {
+				return alert('Nessun esercizio valido selezionato.');
+			}
+			
+			if(currentSessionSets.length === 0) return alert("Inserisci almeno una serie.");
+
+			const ex = db.plan.days[dayIdx].exercises[exIdx];
+			const isSuperSet = !!document.getElementById('input-weight-partner');
+
+			if (isSuperSet) {
+				const partnerName = ex.superSetWith;
+				const partnerEx = db.plan.days[dayIdx].exercises.find(e => e.name === partnerName);
+				
+				if (!partnerEx) {
+					return alert("Errore: Esercizio partner non trovato nel database per salvare la super serie.");
+				}
+
+				// Salva Esercizio A nello Storico
+				db.history.push({
+					date: new Date().toLocaleDateString('it-IT'),
+					week: week,
+					exercise: ex.name,
+					sets: currentSessionSets.map(s => s.exA)
+				});
+
+				// Salva Esercizio B nello Storico
+				db.history.push({
+					date: new Date().toLocaleDateString('it-IT'),
+					week: week,
+					exercise: partnerEx.name,
+					sets: currentSessionSets.map(s => s.exB)
+				});
+			} else {
+				db.history.push({
+					date: new Date().toLocaleDateString('it-IT'),
+					week: week,
+					exercise: ex.name,
+					sets: currentSessionSets
+				});
+			}
+
+			db.last_day_index = parseInt(dayIdx);
+			saveData();
+			alert(isSuperSet ? 'Super Serie salvata con successo!' : 'Esercizio salvato!');
+			currentSessionSets = [];
+			renderCurrentSets();
+			updateLastDoneBadge();
+			startExerciseSession();
+		}
+
+		// --- TAB 2: PIANIFICAZIONE & ARCHIVIO ---
+		function archiveCurrentPlan() {
+			const nameInput = document.getElementById('archive-name-input');
+			const name = nameInput.value.trim();
+			if (!name) return alert("Inserisci un nome descrittivo per salvare la scheda.");
+
+			db.archives.push({
+				id: Date.now(),
+				name: name,
+				planType: db.planType,
+				customWeeks: db.customWeeks,
+				plan: JSON.parse(JSON.stringify(db.plan))
+			});
+			saveData();
+			nameInput.value = '';
+			renderArchivesList();
+			alert(`Programma "${name}" archiviato!`);
+		}
+
+		function renderArchivesList() {
+			const container = document.getElementById('archived-list-container');
+			if (!container) return;
+			if (db.archives.length === 0) {
+				container.innerHTML = `<p class="text-gray-500 text-center py-2 text-xs">Nessun vecchio programma archiviato.</p>`;
+				return;
+			}
+			container.innerHTML = db.archives.map(arc => `
+				<div class="flex justify-between items-center bg-gray-700/50 border border-gray-600 p-2 rounded-lg text-xs">
+					<div>
+						<span class="font-bold text-gray-200 block">${arc.name}</span>
+						<span class="text-[10px] text-gray-400 uppercase">${arc.planType} (${arc.plan.days.length} Giorni)</span>
+					</div>
+					<div class="flex gap-1.5">
+						<button onclick="loadArchivedPlan(${arc.id})" class="bg-emerald-600/80 hover:bg-emerald-700 text-white font-bold px-2 py-1 rounded text-[10px]">🔄 Carica</button>
+						<button onclick="deleteArchivedPlan(${arc.id})" class="text-red-400 hover:text-red-300 px-1">❌</button>
+					</div>
+				</div>
+			`).join('');
+		}
+
+		function loadArchivedPlan(id) {
+			if(confirm("Caricando questo programma, lo storico corrente verrà azzerato per far partire il nuovo ciclo da zero. Confermi?")) {
+				const targetArc = db.archives.find(a => a.id === id);
+				if(!targetArc) return;
+				db.plan = JSON.parse(JSON.stringify(targetArc.plan));
+				db.planType = targetArc.planType;
+				db.customWeeks = targetArc.customWeeks;
+				db.history = []; 
+				db.last_day_index = -1; 
+				saveData();
+				alert(`Programma "${targetArc.name}" caricato con successo!`);
+				switchTab('workout');
+			}
+		}
+
+		function deleteArchivedPlan(id) {
+			if(confirm("Eliminare definitivamente questo salvataggio dall'archivio?")) {
+				db.archives = db.archives.filter(a => a.id !== id);
+				saveData();
+				renderArchivesList();
+			}
+		}
+
+		function createNewEmptyPlan() {
+			if(confirm("Vuoi svuotare la scheda attuale per progettarne una nuova da zero? Assicurati di aver archiviato quella corrente se vuoi recuperarla.")) {
+				db.plan = { days: [] };
+				db.history = [];
+				db.last_day_index = -1;
+				saveData();
+				switchTab('plan');
+			}
+		}
+
+		function initPlanFormSettings() {
+			document.getElementById('global-plan-type').value = db.planType;
+			document.getElementById('global-custom-weeks').value = db.customWeeks;
+			const container = document.getElementById('custom-weeks-container');
+			if(db.planType === "custom") container?.classList.remove('hidden');
+			else container?.classList.add('hidden');
+			populateProgressionDropdownOptions();
+			populateSuperSetSelect();
+		}
+
+		function changeGlobalPlanType() {
+			db.planType = document.getElementById('global-plan-type').value;
+			saveData();
+			initPlanFormSettings();
+			renderPlanTab();
+		}
+
+		function changeCustomWeeksCount() {
+			const val = parseInt(document.getElementById('global-custom-weeks').value);
+			if(val > 0) { 
+				db.customWeeks = val; 
+				saveData(); 
+				if (document.getElementById('plan-progression').value === "custom_table") {
+					generateWeeklyInputRows();
+				}
+			}
+		}
+
+		function populateProgressionDropdownOptions() {
+			const select = document.getElementById('plan-progression');
+			if (!select) return;
+			if (db.planType === "brunaccioni") {
+				select.innerHTML = `<option value="brunaccioni">Brunaccioni (Esercizio Target)</option><option value="statico">Statica / Isolamento (Fisso)</option>`;
+			} else {
+				select.innerHTML = `
+					<option value="statico">Statica / Costante</option>
+					<option value="linear_weight">Incremento Lineare Carico (+kg/W)</option>
+					<option value="linear_reps">Incremento Lineare Reps (+1 rep/W)</option>
+					<option value="custom_table">Tabella Settimanale (Personalizza ogni settimana)</option>
+					<option value="libera">Libera / Variazione Manuale</option>
+				`;
+			}
+			toggleStepInputVisibility();
+		}
+
+		function populateSuperSetSelect() {
+			const dayIdx = parseInt(document.getElementById('plan-day-select').value);
+			const select = document.getElementById('plan-superset-select');
+			if (!select) return;
+			
+			if (isNaN(dayIdx) || !db.plan.days[dayIdx]) {
+				select.innerHTML = '<option value="">-- Seleziona prima un Giorno --</option>';
+				return;
+			}
+			
+			let html = '<option value="">-- Nessuna Super Serie --</option>';
+			db.plan.days[dayIdx].exercises.forEach((ex, idx) => {
+				// Evita di accoppiare un esercizio con se stesso
+				if (currentEditState.dayIdx === dayIdx && currentEditState.exIdx === idx) return;
+				html += `<option value="${ex.name}">${ex.name}</option>`;
+			});
+			select.innerHTML = html;
+		}
+
+		function toggleStepInputVisibility() {
+			const progMode = document.getElementById('plan-progression').value;
+			const stepContainer = document.getElementById('step-increment-container');
+			const noteContainer = document.getElementById('generic-note-container');
+			const weeklyTableContainer = document.getElementById('weekly-table-container');
+			
+			if (!stepContainer || !noteContainer || !weeklyTableContainer) return;
+
+			stepContainer.classList.add('hidden');
+			weeklyTableContainer.classList.add('hidden');
+			noteContainer.className = "col-span-2";
+
+			if (db.planType === "custom") {
+				if (progMode === "linear_weight") {
+					stepContainer.classList.remove('hidden');
+					noteContainer.className = "col-span-1";
+				} else if (progMode === "custom_table") {
+					weeklyTableContainer.classList.remove('hidden');
+					
+					let existingTargets = null;
+					if (currentEditState.dayIdx !== null && currentEditState.exIdx !== null) {
+						const ex = db.plan.days[currentEditState.dayIdx].exercises[currentEditState.exIdx];
+						if (ex && ex.progression === "custom_table") {
+							existingTargets = ex.weeklyTargets;
+						}
+					}
+					generateWeeklyInputRows(existingTargets);
+				}
+			}
+		}
+
+		function generateWeeklyInputRows(existingTargets = null) {
+			const container = document.getElementById('weekly-rows');
+			if (!container) return;
+			const numWeeks = db.planType === "brunaccioni" ? 9 : db.customWeeks;
+			
+			let html = "";
+			const baseSets = parseInt(document.getElementById('plan-sets').value) || 4;
+			const baseReps = parseInt(document.getElementById('plan-reps').value) || 10;
+			const baseWeight = parseFloat(document.getElementById('plan-weight').value) || 0;
+
+			for (let w = 1; w <= numWeeks; w++) {
+				let s = baseSets;
+				let r = baseReps;
+				let wt = baseWeight;
+
+				if (existingTargets && existingTargets[w - 1]) {
+					s = existingTargets[w - 1].sets;
+					r = existingTargets[w - 1].reps;
+					wt = existingTargets[w - 1].weight;
+				}
+
+				html += `
+					<div class="grid grid-cols-4 gap-2 items-center text-xs border-b border-gray-700/50 pb-1.5 last:border-0 last:pb-0">
+						<span class="text-gray-300 font-semibold">Sett. ${w}</span>
+						<div>
+							<input type="number" id="week-${w}-sets" value="${s}" placeholder="Set" class="w-full bg-gray-800 border border-gray-600 rounded p-1 text-center text-white text-xs">
+						</div>
+						<div>
+							<input type="number" id="week-${w}-reps" value="${r}" placeholder="Rep" class="w-full bg-gray-800 border border-gray-600 rounded p-1 text-center text-white text-xs">
+						</div>
+						<div>
+							<input type="number" id="week-${w}-weight" value="${wt}" step="0.5" placeholder="kg" class="w-full bg-gray-800 border border-gray-600 rounded p-1 text-center text-white text-xs">
+						</div>
+					</div>
+				`;
+			}
+			container.innerHTML = html;
+		}
+
+		function syncWeeklyWithBase() {
+			const baseSets = parseInt(document.getElementById('plan-sets').value) || 4;
+			const baseReps = parseInt(document.getElementById('plan-reps').value) || 10;
+			const baseWeight = parseFloat(document.getElementById('plan-weight').value) || 0;
+			const numWeeks = db.planType === "brunaccioni" ? 9 : db.customWeeks;
+			
+			for (let w = 1; w <= numWeeks; w++) {
+				const sEl = document.getElementById(`week-${w}-sets`);
+				const rEl = document.getElementById(`week-${w}-reps`);
+				const wtEl = document.getElementById(`week-${w}-weight`);
+				if (sEl) sEl.value = baseSets;
+				if (rEl) rEl.value = baseReps;
+				if (wtEl) wtEl.value = baseWeight;
+			}
+		}
+
+		function updateWeeklyInputsRealtime() {
+		  const progMode = document.getElementById('plan-progression').value;
+		  if (db.planType === "custom" && progMode === "custom_table") {
+		    generateWeeklyInputRows();
+		  }
+		}
+
+		function addNewDay() {
+			const input = document.getElementById('new-day-name');
+			if (!input) return;
+			const name = input.value.trim();
+			if(name) {
+				db.plan.days.push({ name: name, exercises: [] });
+				db.last_day_index = -1;
+				saveData();
+				input.value = '';
+				renderPlanTab();
+			}
+		}
+
+		function saveExerciseFromForm() {
+			const dayIdx = parseInt(document.getElementById('plan-day-select').value);
+			const name = document.getElementById('plan-exercise-name').value.trim();
+			const sets = parseInt(document.getElementById('plan-sets').value) || 4;
+			const reps = parseInt(document.getElementById('plan-reps').value) || 10;
+			const weight = parseFloat(document.getElementById('plan-weight').value) || 0;
+			const progression = document.getElementById('plan-progression').value;
+			const step = parseFloat(document.getElementById('plan-step').value) || 2.5;
+			const note = document.getElementById('plan-note').value.trim();
+			const superSetWith = document.getElementById('plan-superset-select').value;
+
+			if(isNaN(dayIdx) || !name) return alert("Compila il nome dell'esercizio.");
+
+			let weeklyTargets = [];
+			if (db.planType === "custom" && progression === "custom_table") {
+				const numWeeks = db.customWeeks;
+				for (let w = 1; w <= numWeeks; w++) {
+					const s = parseInt(document.getElementById(`week-${w}-sets`).value) || sets;
+					const r = parseInt(document.getElementById(`week-${w}-reps`).value) || reps;
+					const wt = parseFloat(document.getElementById(`week-${w}-weight`).value) || weight;
+					weeklyTargets.push({ sets: s, reps: r, weight: wt });
+				}
+			}
+
+			// Gestione ridenominazione sicura per le Super Serie
+			let oldName = "";
+			if (currentEditState.dayIdx !== null && currentEditState.exIdx !== null) {
+				const oldEx = db.plan.days[currentEditState.dayIdx].exercises[currentEditState.exIdx];
+				if (oldEx) oldName = oldEx.name;
+			}
+
+			if (oldName && oldName !== name) {
+				db.plan.days[dayIdx].exercises.forEach(ex => {
+					if (ex.superSetWith === oldName) ex.superSetWith = name;
+				});
+			}
+
+			const exerciseData = { name, sets, reps, weight, progression, step, note, weeklyTargets, superSetWith };
+
+			if (currentEditState.dayIdx !== null && currentEditState.exIdx !== null) {
+				if (currentEditState.dayIdx !== dayIdx) {
+					db.plan.days[currentEditState.dayIdx].exercises.splice(currentEditState.exIdx, 1);
+					db.plan.days[dayIdx].exercises.push(exerciseData);
+				} else {
+					db.plan.days[dayIdx].exercises[currentEditState.exIdx] = exerciseData;
+				}
+			} else {
+				db.plan.days[dayIdx].exercises.push(exerciseData);
+			}
+
+			// Collegamento bidirezionale automatico della Super Serie
+			db.plan.days[dayIdx].exercises.forEach(ex => {
+				if (ex.superSetWith === name) ex.superSetWith = "";
+			});
+
+			if (superSetWith) {
+				const partner = db.plan.days[dayIdx].exercises.find(ex => ex.name === superSetWith);
+				if (partner) partner.superSetWith = name;
+			}
+
+			saveData();
+			cancelResetForm();
+			renderPlanTab();
+		}
+
+		function startEditExercise(dIdx, eIdx) {
+			currentEditState = { dayIdx: dIdx, exIdx: eIdx };
+			const ex = db.plan.days[dIdx].exercises[eIdx];
+			document.getElementById('plan-day-select').value = dIdx;
+			document.getElementById('plan-exercise-name').value = ex.name;
+			document.getElementById('plan-sets').value = ex.sets;
+			document.getElementById('plan-reps').value = ex.reps;
+			document.getElementById('plan-weight').value = ex.weight;
+			populateProgressionDropdownOptions();
+			document.getElementById('plan-progression').value = ex.progression;
+			document.getElementById('plan-step').value = ex.step !== undefined ? ex.step : 2.5;
+			document.getElementById('plan-note').value = ex.note || '';
+			
+			populateSuperSetSelect();
+			document.getElementById('plan-superset-select').value = ex.superSetWith || "";
+			
+			toggleStepInputVisibility();
+			if (ex.progression === "custom_table") {
+				generateWeeklyInputRows(ex.weeklyTargets);
+			}
+			
+			document.getElementById('form-exercise-title').innerText = "✏️ Modifica Esercizio";
+			document.getElementById('btn-save-exercise').innerText = "Aggiorna Esercizio";
+			document.getElementById('btn-cancel-edit').classList.remove('hidden');
+			document.getElementById('form-exercise-title').scrollIntoView({ behavior: 'smooth' });
+		}
+
+		function cancelResetForm() {
+			currentEditState = { dayIdx: null, exIdx: null };
+			document.getElementById('plan-exercise-name').value = '';
+			document.getElementById('plan-sets').value = 4;
+			document.getElementById('plan-reps').value = 10;
+			document.getElementById('plan-weight').value = 0;
+			document.getElementById('plan-note').value = '';
+			document.getElementById('form-exercise-title').innerText = "2. Aggiungi Esercizio alla Scheda";
+			document.getElementById('btn-save-exercise').innerText = "Salva Esercizio";
+			document.getElementById('btn-cancel-edit').classList.add('hidden');
+			document.getElementById('plan-progression').value = db.planType === 'brunaccioni' ? 'brunaccioni' : 'statico';
+			toggleStepInputVisibility();
+			populateSuperSetSelect();
+		}
+
+		function removeExercise(dIdx, eIdx) {
+			if(confirm("Eliminare l'esercizio?")) { 
+				const name = db.plan.days[dIdx].exercises[eIdx].name;
+				db.plan.days[dIdx].exercises.splice(eIdx, 1); 
+
+				// Rimuove il link di Super Serie su altri esercizi orfani
+				db.plan.days[dIdx].exercises.forEach(ex => {
+					if (ex.superSetWith === name) ex.superSetWith = "";
+				});
+
+				saveData(); 
+				renderPlanTab(); 
+			}
+		}
+
+		function removeDay(dIdx) {
+			if(confirm("Eliminare intero blocco giorno?")) { db.plan.days.splice(dIdx, 1); db.last_day_index = -1; saveData(); renderPlanTab(); }
+		}
+
+		function renderPlanTab() {
+			const daySelect = document.getElementById('plan-day-select');
+			if (!daySelect) return;
+			daySelect.innerHTML = db.plan.days.map((day, idx) => `<option value="${idx}">${day.name}</option>`).join('');
+			const container = document.getElementById('plan-preview-container');
+			if(!container) return;
+
+			if(db.plan.days.length === 0) {
+				container.innerHTML = `<p class="text-gray-500 text-center py-4 text-xs">Nessuna scheda presente. Crea un blocco giorno.</p>`;
+				return;
+			}
+
+			populateSuperSetSelect();
+
+			container.innerHTML = db.plan.days.map((day, dIdx) => `
+				<div class="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow">
+					<div class="flex justify-between items-center mb-3 pb-2 border-b border-gray-700">
+						<h4 class="font-bold text-indigo-400 text-sm">${day.name}</h4>
+						<button onclick="removeDay(${dIdx})" class="text-[10px] text-red-400 bg-red-950/30 px-2 py-0.5 rounded border border-red-900/40">Elimina Giorno</button>
+					</div>
+					<ul class="space-y-2">
+						${day.exercises.length === 0 ? '<li class="text-gray-500 text-xs py-1">Nessun esercizio inserito.</li>' : ''}
+						${day.exercises.map((ex, eIdx) => `
+							<li class="bg-gray-700/40 p-2.5 rounded-lg text-xs">
+								<div class="flex justify-between items-start">
+									<div>
+										<span class="font-bold text-gray-200 text-sm">${ex.name}</span>
+										${ex.superSetWith ? `<span class="inline-block bg-purple-950/80 text-purple-300 border border-purple-800/60 text-[9px] font-bold px-1.5 py-0.5 rounded-md mt-0.5 ml-1.5">🔗 SS con: ${ex.superSetWith}</span>` : ''}
+										${ex.note ? `<span class="block text-[11px] text-amber-400 italic mt-0.5">📝 ${ex.note}</span>` : ''}
+									</div>
+									<div class="flex gap-2">
+										<button onclick="startEditExercise(${dIdx}, ${eIdx})" class="text-amber-400 bg-amber-950/40 border border-amber-900/50 px-2 py-0.5 rounded text-[10px]">✏️ Modifica</button>
+										<button onclick="removeExercise(${dIdx}, ${eIdx})" class="text-red-400 bg-red-950/40 border border-red-900/50 px-2 py-0.5 rounded text-[10px]">❌</button>
+									</div>
+								</div>
+								<div class="flex justify-between text-gray-400 mt-1.5 text-[11px]">
+									<span>Base: ${ex.sets}x${ex.reps} @ ${ex.weight}kg</span>
+									<span class="text-indigo-400 font-bold uppercase text-[9px]">
+										${ex.progression === 'custom_table' ? 'Tabella Settimanale' : ex.progression}
+									</span>
+								</div>
+							</li>
+						`).join('')}
+					</ul>
+				</div>
+			`).join('');
+		}
+
+		// --- TAB 3: GRAFICO VOLUME (CHART.JS) ---
+		function populateChartExerciseSelector() {
+			const select = document.getElementById('chart-exercise-select');
+			if (!select) return;
+			let distinctExercises = [];
+			db.plan.days.forEach(day => {
+				day.exercises.forEach(ex => {
+					if(!distinctExercises.includes(ex.name)) distinctExercises.push(ex.name);
+				});
+			});
+			if(distinctExercises.length === 0) {
+				select.innerHTML = `<option value="">Nessun esercizio nel programma attuale</option>`;
+				return;
+			}
+			select.innerHTML = distinctExercises.map(ex => `<option value="${ex}">${ex}</option>`).join('');
+		}
+
+		function buildVolumeChart() {
+			const exName = document.getElementById('chart-exercise-select')?.value;
+			const canvas = document.getElementById('volumeChart');
+			if (!canvas) return;
+			const ctx = canvas.getContext('2d');
+			if (volumeChartInstance) volumeChartInstance.destroy();
+
+			const filteredLogs = db.history.filter(log => log.exercise === exName);
+			if (filteredLogs.length === 0 || !exName) {
+				document.getElementById('chart-empty-msg')?.classList.remove('hidden');
+				canvas.classList.add('hidden');
+				return;
+			}
+			document.getElementById('chart-empty-msg')?.classList.add('hidden');
+			canvas.classList.remove('hidden');
+
+			const labels = filteredLogs.map(log => `${log.date} (Sett. ${log.week})`);
+			const dataPoints = filteredLogs.map(log => {
+				return log.sets.reduce((total, set) => total + (set.weight * set.reps), 0);
+			});
+
+			volumeChartInstance = new Chart(ctx, {
+				type: 'line',
+				data: {
+					labels: labels,
+					datasets: [{
+						label: 'Volume Totale (tonnellaggio in kg)',
+						data: dataPoints,
+						borderColor: '#818cf8', 
+						backgroundColor: 'rgba(129, 140, 248, 0.15)',
+						borderWidth: 3,
+						pointBackgroundColor: '#6366f1',
+						pointRadius: 4,
+						tension: 0.25,
+						fill: true
+					}]
+				},
+				options: {
+					responsive: true,
+					maintainAspectRatio: false,
+					scales: {
+						x: { grid: { color: '#374151' }, ticks: { color: '#9ca3af', font: { size: 9 } } },
+						y: { grid: { color: '#374151' }, ticks: { color: '#9ca3af', font: { size: 10 } } }
+					},
+					plugins: {
+						legend: { labels: { color: '#f3f4f6', font: { size: 11, weight: 'bold' } } }
+					}
+				}
+			});
+		}
+
+		// --- IMPORTA / ESPORTA BACKUP GLOBALE ---
+		function exportDataBackup() {
+			const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db, null, 2));
+			const downloadAnchor = document.createElement('a');
+			downloadAnchor.setAttribute("href", dataStr);
+			const today = new Date().toISOString().split('T')[0];
+			downloadAnchor.setAttribute("download", `gymprogress_backup_${today}.json`);
+			document.body.appendChild(downloadAnchor);
+			downloadAnchor.click();
+			downloadAnchor.remove();
+		}
+
+		function importDataBackup(event) {
+			const file = event.target.files[0];
+			if (!file) return;
+
+			const reader = new FileReader();
+			reader.onload = function(e) {
+				try {
+					const importedDb = JSON.parse(e.target.result);
+					if (importedDb.plan && Array.isArray(importedDb.plan.days) && Array.isArray(importedDb.history) && Array.isArray(importedDb.archives)) {
+						if (confirm("⚠️ ATTENZIONE: Importando questo file sovrascriverai completamente tutti i dati attuali. Vuoi procedere?")) {
+							db.history = importedDb.history || [];
+							db.last_day_index = importedDb.last_day_index !== undefined ? importedDb.last_day_index : -1;
+							db.planType = importedDb.planType || "brunaccioni";
+							db.customWeeks = importedDb.customWeeks || 4;
+							db.plan = importedDb.plan || { days: [] };
+							db.archives = importedDb.archives || [];
+							
+							saveData();
+							alert("Importazione completata con successo!");
+							location.reload();
+						}
+					} else {
+						alert("File non valido.");
+					}
+				} catch (err) {
+					alert("Errore durante la lettura del file.");
+				}
+			};
+			reader.readAsText(file);
+		}
+
+		// --- TAB 4: CRONOLOGIA STORICA & RESET ---
+		function clearHistoryOnly() {
+			if(confirm("Vuoi azzerare i grafici e pulire la cronologia? La struttura rimarrà intatta.")) {
+				db.history = [];
+				db.last_day_index = -1;
+				saveData();
+				renderHistory();
+				alert("Storico e grafici svuotati.");
+			}
+		}
+
+		function fullAppReset() {
+			if(confirm("💥 Cancellare tutto DEFINITIVAMENTE? Perderai schede attive, archivio e grafici.")) {
+				localStorage.clear();
+				db = { history: [], last_day_index: -1, planType: "brunaccioni", customWeeks: 4, plan: JSON.parse(JSON.stringify(initialPlan)), archives: [] };
+				saveData();
+				switchTab('workout');
+				alert("Applicazione resettata.");
+			}
+		}
+
+		function renderHistory() {
+			const container = document.getElementById('history-container');
+			if (!container) return;
+			if(db.history.length === 0) {
+				container.innerHTML = `<p class="text-gray-500 text-center py-4 text-xs">Nessuna serie registrata in questo ciclo.</p>`;
+				return;
+			}
+			container.innerHTML = db.history.slice().reverse().map(log => `
+				<div class="bg-gray-800 p-3 rounded-xl border border-gray-700 text-xs">
+					<div class="flex justify-between border-b border-gray-700 pb-1.5 mb-2">
+						<div>
+							<span class="font-bold text-indigo-400 text-sm">${log.exercise}</span>
+							<span class="text-gray-400 block text-[10px]">Settimana: ${log.week}</span>
+						</div>
+						<span class="text-gray-400 font-medium">${log.date}</span>
+					</div>
+					<div class="grid grid-cols-2 gap-1 text-[11px] text-gray-300">
+						${log.sets.map((set, idx) => `<span>Serie ${idx+1}: <strong>${set.weight}kg</strong> x ${set.reps} rep</span>`).join('')}
+					</div>
+				</div>
+			`).join('');
+		}
+
+		// --- AVVIO SICURO AL CARICAMENTO DEL DOM ---
+		document.addEventListener('DOMContentLoaded', () => {
+			const dateDisplay = document.getElementById('date-display');
+			if (dateDisplay) {
+				dateDisplay.innerText = new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
+			}
+			renderWorkoutSelectors();
+		});
+	</script>
+</body>
+</html>
