@@ -255,7 +255,7 @@
                     
                     <label for="import-file-input" class="bg-gray-700 hover:bg-gray-600 text-gray-200 font-bold py-2.5 px-3 rounded-lg text-xs transition-colors flex justify-center items-center gap-1 cursor-pointer text-center">
                         📤 Importa Backup
-                        <input type="file" id="import-file-input" accept="application/json,.json" class="hidden" onchange="importDataBackup(event)">
+                        <input type="file" id="import-file-input" accept="*/*" class="hidden" onchange="importDataBackup(event)">
                     </label>
                 </div>
             </div>
@@ -300,7 +300,7 @@
 
     <script>
         // Parametro Globale Unico di Versione dell'Applicazione
-        const APP_VERSION = '1.1.1';
+        const APP_VERSION = '1.1.2';
 
 		// Database pre-caricato completo
 		const initialPlan = {
@@ -1395,7 +1395,16 @@
 		function importDataBackup(event) {
 			const file = event.target.files[0];
 			if (!file) return;
-
+			
+			if (!file.name.endsWith('.json')) {
+				alert("Errore: Il file selezionato non è un backup valido. Assicurati che l'estensione sia .json");
+				
+				// Svuota l'input così se l'utente ci riclicca lo resetta
+				event.target.value = '';
+				
+				return;
+			}
+			
 			const reader = new FileReader();
 			reader.onload = function(e) {
 				try {
