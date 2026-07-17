@@ -255,7 +255,7 @@
                     
                     <label for="import-file-input" class="bg-gray-700 hover:bg-gray-600 text-gray-200 font-bold py-2.5 px-3 rounded-lg text-xs transition-colors flex justify-center items-center gap-1 cursor-pointer text-center">
                         📤 Importa Backup
-                        <input type="file" id="import-file-input" accept=".json" class="hidden" onchange="importDataBackup(event)">
+                        <input type="file" id="import-file-input" accept="application/json,.json" class="hidden" onchange="importDataBackup(event)">
                     </label>
                 </div>
             </div>
@@ -300,7 +300,7 @@
 
     <script>
         // Parametro Globale Unico di Versione dell'Applicazione
-        const APP_VERSION = '1.1.0';
+        const APP_VERSION = '1.1.1';
 
 		// Database pre-caricato completo
 		const initialPlan = {
@@ -327,12 +327,12 @@
 		};
 
 		let db = {
-			history: JSON.parse(localStorage.getItem(`gym_history_${APP_VERSION}`)) || [],
-			last_day_index: localStorage.getItem(`gym_last_day_index_${APP_VERSION}`) !== null ? parseInt(localStorage.getItem(`gym_last_day_index_${APP_VERSION}`)) : -1,
-			planType: localStorage.getItem(`gym_plan_type_${APP_VERSION}`) || "brunaccioni", 
-			customWeeks: localStorage.getItem(`gym_custom_weeks_${APP_VERSION}`) !== null ? parseInt(localStorage.getItem(`gym_custom_weeks_${APP_VERSION}`)) : 4,
-			plan: JSON.parse(localStorage.getItem(`gym_plan_${APP_VERSION}`)) || JSON.parse(JSON.stringify(initialPlan)),
-			archives: JSON.parse(localStorage.getItem(`gym_archives_${APP_VERSION}`)) || []
+			history: JSON.parse(localStorage.getItem('gym_history')) || [],
+			last_day_index: localStorage.getItem('gym_last_day_index') !== null ? parseInt(localStorage.getItem('gym_last_day_index_fixed')) : -1,
+			planType: localStorage.getItem('gym_plan_type') || "brunaccioni", 
+			customWeeks: localStorage.getItem('gym_custom_weeks') !== null ? parseInt(localStorage.getItem('gym_custom_weeks_fixed')) : 4,
+			plan: JSON.parse(localStorage.getItem('gym_plan')) || JSON.parse(JSON.stringify(initialPlan)),
+			archives: JSON.parse(localStorage.getItem('gym_archives')) || []
 		};
 		
 		let currentSessionSets = [];
@@ -345,12 +345,12 @@
         let defaultRestSeconds = 90;
 
 		function saveData() {
-			localStorage.setItem(`gym_history_${APP_VERSION}`, JSON.stringify(db.history));
-			localStorage.setItem(`gym_last_day_index_${APP_VERSION}`, db.last_day_index);
-			localStorage.setItem(`gym_plan_type_${APP_VERSION}`, db.planType);
-			localStorage.setItem(`gym_custom_weeks_${APP_VERSION}`, db.customWeeks);
-			localStorage.setItem(`gym_plan_${APP_VERSION}`, JSON.stringify(db.plan));
-			localStorage.setItem(`gym_archives_${APP_VERSION}`, JSON.stringify(db.archives));
+			localStorage.setItem('gym_history', JSON.stringify(db.history));
+			localStorage.setItem('gym_last_day_index', db.last_day_index);
+			localStorage.setItem('gym_plan_type', db.planType);
+			localStorage.setItem('gym_custom_weeks', db.customWeeks);
+			localStorage.setItem('gym_plan', JSON.stringify(db.plan));
+			localStorage.setItem('gym_archives', JSON.stringify(db.archives));
 		}
 
 		function switchTab(tabId) {
