@@ -255,6 +255,9 @@
                     
                     <label for="import-file-input" class="bg-gray-700 hover:bg-gray-600 text-gray-200 font-bold py-2.5 px-3 rounded-lg text-xs transition-colors flex justify-center items-center gap-1 cursor-pointer text-center">
                         📤 Importa Backup
+                        <!-- accept="*/*" VOLUTO: su mobile (Android/iOS) filtrare per .json/application/json
+                             rende il file NON selezionabile dalle scorciatoie "file recenti" (MIME registrato
+                             spesso generico). La validazione .json avviene comunque in importDataBackup(). -->
                         <input type="file" id="import-file-input" accept="*/*" class="hidden" onchange="importDataBackup(event)">
                     </label>
                 </div>
@@ -300,7 +303,7 @@
 
     <script>
         // Parametro Globale Unico di Versione dell'Applicazione
-        const APP_VERSION = '1.1.2';
+        const APP_VERSION = '1.2.1';
 
 		// Database pre-caricato completo
 		const initialPlan = {
@@ -308,19 +311,19 @@
 				{
 					name: "Giorno 1: Spinta (Petto/Spalle/Tricipiti)",
 					exercises: [
-						{ name: "Panca Piana Manubri", sets: 4, reps: 8, weight: 24, progression: "brunaccioni", step: 0, note: "Panca 30°", superSetWith: "", restSeconds: 90 },
-						{ name: "Shoulder Press", sets: 4, reps: 10, weight: 16, progression: "brunaccioni", step: 0, note: "Manubri", superSetWith: "", restSeconds: 90 },
-						{ name: "Croci ai cavi alti", sets: 3, reps: 12, weight: 15, progression: "statico", step: 0, note: "Area Cavi", superSetWith: "", restSeconds: 60 },
-						{ name: "French Press", sets: 3, reps: 10, weight: 20, progression: "statico", step: 0, note: "Bilanciere EZ", superSetWith: "", restSeconds: 60 }
+						{ id: "seed-d1e1", name: "Panca Piana Manubri", sets: 4, reps: 8, weight: 24, progression: "brunaccioni", step: 0, note: "Panca 30°", superSetWith: "", restSeconds: 90 },
+						{ id: "seed-d1e2", name: "Shoulder Press", sets: 4, reps: 10, weight: 16, progression: "brunaccioni", step: 0, note: "Manubri", superSetWith: "", restSeconds: 90 },
+						{ id: "seed-d1e3", name: "Croci ai cavi alti", sets: 3, reps: 12, weight: 15, progression: "statico", step: 0, note: "Area Cavi", superSetWith: "", restSeconds: 60 },
+						{ id: "seed-d1e4", name: "French Press", sets: 3, reps: 10, weight: 20, progression: "statico", step: 0, note: "Bilanciere EZ", superSetWith: "", restSeconds: 60 }
 					]
 				},
 				{
 					name: "Giorno 2: Trazione (Dorso/Bicipiti)",
 					exercises: [
-						{ name: "Lat Machine Prona", sets: 4, reps: 10, weight: 50, progression: "brunaccioni", step: 0, note: "Tirata Verticale", superSetWith: "", restSeconds: 90 },
-						{ name: "Pulley Basso", sets: 4, reps: 8, weight: 45, progression: "brunaccioni", step: 0, note: "Tirata Orizzontale", superSetWith: "", restSeconds: 90 },
-						{ name: "Alzate Laterali", sets: 3, reps: 12, weight: 8, progression: "statico", step: 0, note: "Manubri", superSetWith: "", restSeconds: 45 },
-						{ name: "Curl Alternato Manubri", sets: 3, reps: 10, weight: 12, progression: "statico", step: 0, note: "Seduto", superSetWith: "", restSeconds: 60 }
+						{ id: "seed-d2e1", name: "Lat Machine Prona", sets: 4, reps: 10, weight: 50, progression: "brunaccioni", step: 0, note: "Tirata Verticale", superSetWith: "", restSeconds: 90 },
+						{ id: "seed-d2e2", name: "Pulley Basso", sets: 4, reps: 8, weight: 45, progression: "brunaccioni", step: 0, note: "Tirata Orizzontale", superSetWith: "", restSeconds: 90 },
+						{ id: "seed-d2e3", name: "Alzate Laterali", sets: 3, reps: 12, weight: 8, progression: "statico", step: 0, note: "Manubri", superSetWith: "", restSeconds: 45 },
+						{ id: "seed-d2e4", name: "Curl Alternato Manubri", sets: 3, reps: 10, weight: 12, progression: "statico", step: 0, note: "Seduto", superSetWith: "", restSeconds: 60 }
 					]
 				}
 			]
@@ -328,13 +331,20 @@
 
 		let db = {
 			history: JSON.parse(localStorage.getItem('gym_history')) || [],
-			last_day_index: localStorage.getItem('gym_last_day_index') !== null ? parseInt(localStorage.getItem('gym_last_day_index_fixed')) : -1,
+			last_day_index: localStorage.getItem('gym_last_day_index') !== null ? parseInt(localStorage.getItem('gym_last_day_index'), 10) : -1,
 			planType: localStorage.getItem('gym_plan_type') || "brunaccioni", 
-			customWeeks: localStorage.getItem('gym_custom_weeks') !== null ? parseInt(localStorage.getItem('gym_custom_weeks_fixed')) : 4,
+			customWeeks: localStorage.getItem('gym_custom_weeks') !== null ? parseInt(localStorage.getItem('gym_custom_weeks'), 10) : 4,
 			plan: JSON.parse(localStorage.getItem('gym_plan')) || JSON.parse(JSON.stringify(initialPlan)),
 			archives: JSON.parse(localStorage.getItem('gym_archives')) || []
 		};
-		
+
+		// Contatore per gli id stabili: dichiarato PRIMA di migrateData() (che usa genExId)
+		// per evitare la Temporal Dead Zone del `let` al primo boot.
+		let __exIdCounter = 0;
+
+		// Migrazione al modello con id stabili per esercizio (>= v1.2.0). Idempotente.
+		migrateData();
+
 		let currentSessionSets = [];
         let editingSetIndex = null; 
 		let currentEditState = { dayIdx: null, exIdx: null };
@@ -343,6 +353,81 @@
         let timerInterval = null;
         let timerTimeLeft = 0;
         let defaultRestSeconds = 90;
+
+		// --- Identità stabile degli esercizi (id per-slot) ---
+		// (__exIdCounter è dichiarato più in alto, prima della chiamata a migrateData)
+		function genExId() {
+			__exIdCounter++;
+			// Date.now() è disponibile nel browser; il contatore garantisce unicità anche a parità di ms.
+			return `ex-${Date.now().toString(36)}-${__exIdCounter.toString(36)}`;
+		}
+
+		// Escaping HTML per neutralizzare input utente (nomi esercizio/giorno/archivio, note)
+		// prima di inserirli via innerHTML. Difende da XSS, soprattutto all'import di backup.
+		function esc(value) {
+			return String(value == null ? "" : value)
+				.replace(/&/g, "&amp;")
+				.replace(/</g, "&lt;")
+				.replace(/>/g, "&gt;")
+				.replace(/"/g, "&quot;")
+				.replace(/'/g, "&#39;");
+		}
+
+		// Trova un esercizio (in tutto il piano attivo) dato il suo id stabile.
+		function findExerciseById(id) {
+			if (!id) return null;
+			for (let dIdx = 0; dIdx < db.plan.days.length; dIdx++) {
+				const exIdx = db.plan.days[dIdx].exercises.findIndex(e => e.id === id);
+				if (exIdx !== -1) {
+					return { day: db.plan.days[dIdx], ex: db.plan.days[dIdx].exercises[exIdx], dayIdx: dIdx, exIdx };
+				}
+			}
+			return null;
+		}
+
+		// Migrazione idempotente: assegna id mancanti e converte i vecchi link super serie
+		// (basati sul NOME e bidirezionali) in link basati su ID e UNIDIREZIONALI.
+		function migrateData() {
+			const migratePlan = (plan) => {
+				if (!plan || !Array.isArray(plan.days)) return;
+				// 1) Assegna un id a ogni esercizio che non ce l'ha.
+				plan.days.forEach(day => {
+					(day.exercises || []).forEach(ex => { if (!ex.id) ex.id = genExId(); });
+				});
+				// 2) Converte superSetWith: se è un nome (vecchio formato) risolvi all'id del partner
+				//    nello stesso giorno; poi rendi il link unidirezionale (tieni il primo della coppia).
+				plan.days.forEach(day => {
+					const exs = day.exercises || [];
+					exs.forEach(ex => {
+						if (!ex.superSetWith) return;
+						// Già un id valido nello stesso giorno? lascialo.
+						const isIdInDay = exs.some(e => e.id === ex.superSetWith);
+						if (!isIdInDay) {
+							// Vecchio formato: superSetWith era un nome → risolvi all'id.
+							const partnerByName = exs.find(e => e.name === ex.superSetWith && e.id !== ex.id);
+							ex.superSetWith = partnerByName ? partnerByName.id : "";
+						}
+					});
+					// 3) Rompi la bidirezionalità: se A→B e B→A, tieni solo A→B.
+					exs.forEach(ex => {
+						if (!ex.superSetWith) return;
+						const partner = exs.find(e => e.id === ex.superSetWith);
+						if (partner && partner.superSetWith === ex.id) {
+							partner.superSetWith = "";
+						}
+					});
+				});
+			};
+			migratePlan(db.plan);
+			(db.archives || []).forEach(arc => migratePlan(arc.plan));
+		}
+
+		// Restituisce true se questo esercizio è il SECONDARIO di una super serie
+		// (cioè un altro esercizio dello stesso giorno lo indica come partner).
+		function isSecondaryOfSuperSet(dayIdx, exId) {
+			if (!db.plan.days[dayIdx]) return false;
+			return db.plan.days[dayIdx].exercises.some(e => e.superSetWith === exId);
+		}
 
 		function saveData() {
 			localStorage.setItem('gym_history', JSON.stringify(db.history));
@@ -388,21 +473,21 @@
 
 			if (db.planType === "brunaccioni") {
 				if (ex.progression !== "brunaccioni") return { sets, reps, weight, label: "Statico" };
-				switch(parseInt(week)) {
+				switch(parseInt(week, 10)) {
 					case 1: label = "Base (RIR 1-2)"; break;
 					case 2: sets = ex.sets + 1; label = "Vol + (Serie +1)"; break;
 					case 3: reps = ex.reps + 1; label = "Reps + (Ripetizione +1)"; break;
 					case 4: sets = ex.sets + 1; reps = ex.reps + 1; label = "Consolidamento Vol++"; break;
-					case 5: reps = ex.reps - 1; weight = Math.round(ex.weight * 1.05 * 2) / 2; label = "Carico +5% (-1 rep)"; break;
-					case 6: sets = ex.sets + 1; reps = ex.reps - 1; weight = Math.round(ex.weight * 1.05 * 2) / 2; label = "Vol+ col nuovo peso"; break;
+					case 5: reps = Math.max(1, ex.reps - 1); weight = Math.round(ex.weight * 1.05 * 2) / 2; label = "Carico +5% (-1 rep)"; break;
+					case 6: sets = ex.sets + 1; reps = Math.max(1, ex.reps - 1); weight = Math.round(ex.weight * 1.05 * 2) / 2; label = "Vol+ col nuovo peso"; break;
 					case 7: weight = Math.round(ex.weight * 1.05 * 2) / 2; label = "Reps+ col nuovo peso"; break;
 					case 8: sets = ex.sets + 1; weight = Math.round(ex.weight * 1.05 * 2) / 2; label = "Max Vol col nuovo peso"; break;
-					case 9: reps = ex.reps - 2; weight = Math.round(ex.weight * 1.10 * 2) / 2; label = "Reset & Carico ++10%"; break;
+					case 9: reps = Math.max(1, ex.reps - 2); weight = Math.round(ex.weight * 1.10 * 2) / 2; label = "Reset & Carico ++10%"; break;
 				}
 				return { sets, reps, weight, label };
 			}
 
-			const w = parseInt(week);
+			const w = parseInt(week, 10);
 			if (ex.progression === "linear_weight") {
 				const inc = ex.step !== undefined ? ex.step : 2.5;
 				weight = ex.weight + ((w - 1) * inc);
@@ -448,7 +533,7 @@
 				return;
 			}
 			document.getElementById('workout-flow')?.classList.remove('hidden');
-			daySelect.innerHTML = db.plan.days.map((day, idx) => `<option value="${idx}">${day.name.split(":")[0]}</option>`).join('');
+			daySelect.innerHTML = db.plan.days.map((day, idx) => `<option value="${idx}">${esc(day.name.split(":")[0])}</option>`).join('');
 			
 			if (db.last_day_index !== -1 && db.last_day_index < db.plan.days.length) {
 				daySelect.value = (db.last_day_index + 1) % db.plan.days.length;
@@ -480,14 +565,18 @@
 				return;
 			}
 			document.getElementById('target-box')?.classList.remove('hidden');
-			activeExSelect.innerHTML = db.plan.days[dayIdx].exercises.map((ex, idx) => `<option value="${idx}">${ex.name}</option>`).join('');
+			// Nascondi i "secondari" di una super serie: vengono registrati insieme al primario.
+			activeExSelect.innerHTML = db.plan.days[dayIdx].exercises
+				.map((ex, idx) => ({ ex, idx }))
+				.filter(o => !isSecondaryOfSuperSet(dayIdx, o.ex.id))
+				.map(o => `<option value="${o.idx}">${esc(o.ex.name)}</option>`).join('');
 			startExerciseSession();
 		}
 
 		function startExerciseSession() {
 			const dayIdx = document.getElementById('workout-day-select').value;
 			const exIdx = document.getElementById('active-exercise-select').value;
-			const week = parseInt(document.getElementById('workout-week-select').value);
+			const week = parseInt(document.getElementById('workout-week-select').value, 10);
 			if(dayIdx === "" || exIdx === "" || !db.plan.days[dayIdx] || !db.plan.days[dayIdx].exercises[exIdx]) return;
 
 			const ex = db.plan.days[dayIdx].exercises[exIdx];
@@ -496,11 +585,11 @@
             defaultRestSeconds = ex.restSeconds !== undefined ? ex.restSeconds : 90;
             initTimer(defaultRestSeconds);
 
-			const partnerName = ex.superSetWith;
+			const partnerId = ex.superSetWith;
 			let partnerEx = null;
 			let partnerTarget = null;
-			if (partnerName) {
-				partnerEx = db.plan.days[dayIdx].exercises.find(e => e.name === partnerName);
+			if (partnerId) {
+				partnerEx = db.plan.days[dayIdx].exercises.find(e => e.id === partnerId);
 				if (partnerEx) {
 					partnerTarget = getCalculatedTarget(partnerEx, week);
 				}
@@ -520,19 +609,19 @@
 						</div>
 						<div>
 							<div class="flex justify-between items-center text-[10px] text-gray-400">
-								<span>Esercizio A: <strong>${ex.name}</strong></span>
+								<span>Esercizio A: <strong>${esc(ex.name)}</strong></span>
 								<span class="bg-indigo-900/60 text-indigo-300 px-1.5 py-0.5 rounded font-semibold uppercase text-[8px]">${target.label}</span>
 							</div>
 							<p class="text-base font-bold text-indigo-200">${target.sets} set x ${target.reps} rep @ ${target.weight} kg</p>
-							${ex.note ? `<p class="text-[11px] text-amber-400 italic mt-0.5">📝 Nota: ${ex.note}</p>` : ''}
+							${ex.note ? `<p class="text-[11px] text-amber-400 italic mt-0.5">📝 Nota: ${esc(ex.note)}</p>` : ''}
 						</div>
 						<div class="border-t border-indigo-900/40 pt-2">
 							<div class="flex justify-between items-center text-[10px] text-gray-400">
-								<span>Esercizio B: <strong>${partnerEx.name}</strong></span>
+								<span>Esercizio B: <strong>${esc(partnerEx.name)}</strong></span>
 								<span class="bg-indigo-900/60 text-indigo-300 px-1.5 py-0.5 rounded font-semibold uppercase text-[8px]">${partnerTarget.label}</span>
 							</div>
 							<p class="text-base font-bold text-indigo-200">${partnerTarget.sets} set x ${partnerTarget.reps} rep @ ${partnerTarget.weight} kg</p>
-							${partnerEx.note ? `<p class="text-[11px] text-amber-400 italic mt-0.5">📝 Nota: ${partnerEx.note}</p>` : ''}
+							${partnerEx.note ? `<p class="text-[11px] text-amber-400 italic mt-0.5">📝 Nota: ${esc(partnerEx.note)}</p>` : ''}
 						</div>
 					</div>
 				`;
@@ -544,7 +633,7 @@
 							<span id="target-type-badge" class="text-[9px] bg-indigo-900 text-indigo-200 px-1.5 py-0.5 rounded font-bold uppercase">${target.label}</span>
 						</div>
 						<p id="target-text" class="text-lg font-bold text-indigo-200">${target.sets} serie x ${target.reps} rep @ ${target.weight} kg</p>
-						<p id="target-note" class="text-xs text-amber-400 mt-1.5 italic ${ex.note ? '' : 'hidden'}">${ex.note ? '📝 Nota: ' + ex.note : ''}</p>
+						<p id="target-note" class="text-xs text-amber-400 mt-1.5 italic ${ex.note ? '' : 'hidden'}">${ex.note ? '📝 Nota: ' + esc(ex.note) : ''}</p>
 					</div>
 				`;
 			}
@@ -557,7 +646,7 @@
 					<h3 class="font-semibold mb-3 text-gray-200" id="set-counter-title">Registra Super Serie - Giro 1</h3>
 					<div class="space-y-4">
 						<div class="p-3 bg-gray-900/40 rounded-lg border border-indigo-950">
-							<p class="text-xs font-bold text-indigo-400 mb-2">A: ${ex.name}</p>
+							<p class="text-xs font-bold text-indigo-400 mb-2">A: ${esc(ex.name)}</p>
 							<div class="grid grid-cols-2 gap-3">
 								<div>
 									<label for="input-weight" class="block text-[10px] text-gray-400 mb-1">Carico (kg)</label>
@@ -571,7 +660,7 @@
 						</div>
 						
 						<div class="p-3 bg-gray-900/40 rounded-lg border border-purple-950">
-							<p class="text-xs font-bold text-purple-400 mb-2">B: ${partnerEx.name}</p>
+							<p class="text-xs font-bold text-purple-400 mb-2">B: ${esc(partnerEx.name)}</p>
 							<div class="grid grid-cols-2 gap-3">
 								<div>
 									<label for="input-weight-partner" class="block text-[10px] text-gray-400 mb-1">Carico (kg)</label>
@@ -624,40 +713,69 @@
 			updateSetCounter();
 		}
 
+        // Prepara il timer al valore di riposo dell'esercizio corrente, FERMANDO qualsiasi
+        // countdown in corso (fix #4: evita che un timer avviato prosegua sotto il nuovo esercizio).
         function initTimer(seconds) {
+            clearInterval(timerInterval);
+            timerInterval = null;
             defaultRestSeconds = seconds || 90;
             timerTimeLeft = defaultRestSeconds;
             document.getElementById('timer-container').classList.remove('hidden');
             updateTimerDisplay();
+            setTimerButtonState('idle');
         }
 
         function updateTimerDisplay() {
             const minutes = Math.floor(timerTimeLeft / 60);
             const secs = timerTimeLeft % 60;
-            document.getElementById('timer-display').innerText = 
+            document.getElementById('timer-display').innerText =
                 `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
         }
 
-        function toggleTimer() {
+        // Aspetto del pulsante secondo lo stato: 'idle' (Avvia) | 'running' (Pausa) | 'paused' (Riprendi)
+        function setTimerButtonState(state) {
             const btn = document.getElementById('timer-btn');
-            if (timerInterval) {
-                clearInterval(timerInterval);
-                timerInterval = null;
+            if (!btn) return;
+            if (state === 'running') {
+                btn.innerText = "Pausa";
+                btn.className = "bg-red-500 hover:bg-red-600 text-white font-bold px-4 py-1.5 rounded-lg text-xs transition-all";
+            } else if (state === 'paused') {
                 btn.innerText = "Riprendi";
                 btn.className = "bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold px-4 py-1.5 rounded-lg text-xs transition-all";
             } else {
-                btn.innerText = "Pausa";
-                btn.className = "bg-red-500 hover:bg-red-600 text-white font-bold px-4 py-1.5 rounded-lg text-xs transition-all";
-                timerInterval = setInterval(() => {
-                    timerTimeLeft--;
-                    updateTimerDisplay();
-                    if (timerTimeLeft <= 0) {
-                        clearInterval(timerInterval);
-                        timerInterval = null;
-                        triggerAlert();
-                        resetTimer();
-                    }
-                }, 1000);
+                btn.innerText = "Avvia";
+                btn.className = "bg-emerald-600 hover:bg-emerald-700 text-slate-900 font-bold px-4 py-1.5 rounded-lg text-xs transition-all";
+            }
+        }
+
+        // Avvia il countdown (no-op se è già in corso). Usato sia dai pulsanti sia dall'auto-avvio.
+        function startTimerCountdown() {
+            if (timerInterval) return;
+            setTimerButtonState('running');
+            timerInterval = setInterval(() => {
+                timerTimeLeft--;
+                updateTimerDisplay();
+                if (timerTimeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    timerInterval = null;
+                    triggerAlert();
+                    resetTimer();
+                }
+            }, 1000);
+        }
+
+        function pauseTimerCountdown() {
+            clearInterval(timerInterval);
+            timerInterval = null;
+            setTimerButtonState('paused');
+        }
+
+        // Pulsante manuale: alterna Pausa/Riprendi mantenendo la flessibilità di sempre.
+        function toggleTimer() {
+            if (timerInterval) {
+                pauseTimerCountdown();
+            } else {
+                startTimerCountdown();
             }
         }
 
@@ -666,9 +784,16 @@
             timerInterval = null;
             timerTimeLeft = defaultRestSeconds;
             updateTimerDisplay();
-            const btn = document.getElementById('timer-btn');
-            btn.innerText = "Avvia";
-            btn.className = "bg-emerald-600 hover:bg-emerald-700 text-slate-900 font-bold px-4 py-1.5 rounded-lg text-xs transition-all";
+            setTimerButtonState('idle');
+        }
+
+        // Auto-avvio del recupero dopo aver salvato una serie: riparte sempre dal tempo pieno.
+        function autoStartRestTimer() {
+            clearInterval(timerInterval);
+            timerInterval = null;
+            timerTimeLeft = defaultRestSeconds;
+            updateTimerDisplay();
+            startTimerCountdown();
         }
 
         function triggerAlert() {
@@ -721,14 +846,14 @@
 
 				if (!wA || !rA || !wB || !rB) return alert('Inserisci dati validi.');
 				dataPack = {
-					exA: { weight: parseFloat(wA), reps: parseInt(rA) },
-					exB: { weight: parseFloat(wB), reps: parseInt(rB) }
+					exA: { weight: parseFloat(wA), reps: parseInt(rA, 10) },
+					exB: { weight: parseFloat(wB), reps: parseInt(rB, 10) }
 				};
 			} else {
 				const weight = document.getElementById('input-weight').value;
 				const reps = document.getElementById('input-reps').value;
 				if(!weight || !reps) return alert('Inserisci dati validi');
-				dataPack = { weight: parseFloat(weight), reps: parseInt(reps) };
+				dataPack = { weight: parseFloat(weight), reps: parseInt(reps, 10) };
 			}
 
             if (editingSetIndex !== null) {
@@ -737,7 +862,7 @@
                 document.getElementById('btn-save-temp-set').innerText = isSuperSet ? "💾 Salva Giro Super Serie" : "💾 Salva Serie";
             } else {
                 currentSessionSets.push(dataPack);
-                initTimer(defaultRestSeconds);
+                autoStartRestTimer();
             }
 
 			renderCurrentSets();
@@ -813,10 +938,56 @@
 			}
 		}
 
+		// Avanza automaticamente il "cursore" dell'allenamento dopo un salvataggio:
+		// esercizio successivo → (fine giorno) giorno successivo → (fine settimana) settimana
+		// successiva → (fine programma) ricomincia da Settimana 1 · Giorno 1 · Esercizio 1.
+		// Legge sempre i selettori correnti: la selezione manuale di settimana/giorno/esercizio
+		// resta pienamente valida (il prossimo avanzamento riparte da dove ti trovi).
+		// Ritorna la fase raggiunta: 'exercise' | 'day' | 'week' | 'restart'.
+		function advanceWorkoutCursor() {
+			const exSel = document.getElementById('active-exercise-select');
+			const daySel = document.getElementById('workout-day-select');
+			const weekSel = document.getElementById('workout-week-select');
+			if (!exSel || !daySel || !weekSel) return 'exercise';
+
+			// 1) Esercizio successivo nello stesso giorno (tra le opzioni VISIBILI: i secondari
+			//    delle super serie sono già esclusi dal menu).
+			if (exSel.selectedIndex < exSel.options.length - 1) {
+				exSel.selectedIndex += 1;
+				startExerciseSession();
+				return 'exercise';
+			}
+
+			// Giorno completato → 2) giorno successivo.
+			const dayCount = db.plan.days.length;
+			const curDay = parseInt(daySel.value, 10) || 0;
+			if (curDay < dayCount - 1) {
+				daySel.value = curDay + 1;
+				loadPlannedExercises();
+				return 'day';
+			}
+
+			// Settimana completata → 3) settimana successiva (torna a Giorno 1 · Esercizio 1).
+			const weekCount = db.planType === 'brunaccioni' ? 9 : db.customWeeks;
+			const curWeek = parseInt(weekSel.value, 10) || 1;
+			if (curWeek < weekCount) {
+				weekSel.value = curWeek + 1;
+				daySel.value = 0;
+				loadPlannedExercises();
+				return 'week';
+			}
+
+			// 4) Programma completato → ricomincia da Settimana 1 · Giorno 1 · Esercizio 1.
+			weekSel.value = 1;
+			daySel.value = 0;
+			loadPlannedExercises();
+			return 'restart';
+		}
+
 		function saveCurrentWorkoutSession() {
 			const dayIdx = document.getElementById('workout-day-select').value;
 			const exIdx = document.getElementById('active-exercise-select').value;
-			const week = document.getElementById('workout-week-select').value;
+			const week = parseInt(document.getElementById('workout-week-select').value, 10);
 			if(dayIdx === "" || exIdx === "" || !db.plan.days[dayIdx] || !db.plan.days[dayIdx].exercises[exIdx]) return;
 			
 			if(currentSessionSets.length === 0) return alert("Inserisci almeno una serie.");
@@ -825,9 +996,9 @@
 			const isSuperSet = !!document.getElementById('input-weight-partner');
 
 			if (isSuperSet) {
-				const partnerName = ex.superSetWith;
-				const partnerEx = db.plan.days[dayIdx].exercises.find(e => e.name === partnerName);
-				
+				const partnerId = ex.superSetWith;
+				const partnerEx = db.plan.days[dayIdx].exercises.find(e => e.id === partnerId);
+
 				if (!partnerEx) return alert("Errore partner non trovato.");
 
 				db.history.push({
@@ -852,14 +1023,22 @@
 				});
 			}
 
-			db.last_day_index = parseInt(dayIdx);
+			db.last_day_index = parseInt(dayIdx, 10);
 			saveData();
-			alert('Esercizio salvato con successo!');
 			currentSessionSets = [];
             editingSetIndex = null;
 			renderCurrentSets();
 			updateLastDoneBadge();
-			startExerciseSession();
+
+			// Avanza il cursore (esercizio → giorno → settimana → ricomincia) e adatta il messaggio.
+			const phase = advanceWorkoutCursor();
+			const messages = {
+				exercise: '✅ Esercizio salvato! Passo al successivo.',
+				day: '✅ Giorno completato! Passo al giorno successivo.',
+				week: '🎉 Settimana completata! Passo alla settimana successiva (Giorno 1).',
+				restart: '🏆 Programma completato! Si ricomincia da Settimana 1 · Giorno 1.'
+			};
+			alert(messages[phase] || 'Esercizio salvato con successo!');
 		}
 
 		function archiveCurrentPlan() {
@@ -890,8 +1069,8 @@
 			container.innerHTML = db.archives.map(arc => `
 				<div class="flex justify-between items-center bg-gray-700/50 border border-gray-600 p-2 rounded-lg text-xs">
 					<div>
-						<span class="font-bold text-gray-200 block">${arc.name}</span>
-						<span class="text-[10px] text-gray-400 uppercase">${arc.planType} (${arc.plan.days.length} Giorni)</span>
+						<span class="font-bold text-gray-200 block">${esc(arc.name)}</span>
+						<span class="text-[10px] text-gray-400 uppercase">${esc(arc.planType)} (${arc.plan.days.length} Giorni)</span>
 					</div>
 					<div class="flex gap-1.5">
 						<button onclick="loadArchivedPlan(${arc.id})" class="bg-emerald-600/80 hover:bg-emerald-700 text-white font-bold px-2 py-1 rounded text-[10px]">🔄 Carica</button>
@@ -952,7 +1131,7 @@
 		}
 
 		function changeCustomWeeksCount() {
-			const val = parseInt(document.getElementById('global-custom-weeks').value);
+			const val = parseInt(document.getElementById('global-custom-weeks').value, 10);
 			if(val > 0) { 
 				db.customWeeks = val; 
 				saveData(); 
@@ -980,7 +1159,7 @@
 		}
 
 		function populateSuperSetSelect() {
-			const dayIdx = parseInt(document.getElementById('plan-day-select').value);
+			const dayIdx = parseInt(document.getElementById('plan-day-select').value, 10);
 			const select = document.getElementById('plan-superset-select');
 			if (!select) return;
 			
@@ -992,7 +1171,7 @@
 			let html = '<option value="">-- Nessuna Super Serie --</option>';
 			db.plan.days[dayIdx].exercises.forEach((ex, idx) => {
 				if (currentEditState.dayIdx === dayIdx && currentEditState.exIdx === idx) return;
-				html += `<option value="${ex.name}">${ex.name}</option>`;
+				html += `<option value="${esc(ex.id)}">${esc(ex.name)}</option>`;
 			});
 			select.innerHTML = html;
 		}
@@ -1034,8 +1213,8 @@
 			const numWeeks = db.planType === "brunaccioni" ? 9 : db.customWeeks;
 			
 			let html = "";
-			const baseSets = parseInt(document.getElementById('plan-sets').value) || 4;
-			const baseReps = parseInt(document.getElementById('plan-reps').value) || 10;
+			const baseSets = parseInt(document.getElementById('plan-sets').value, 10) || 4;
+			const baseReps = parseInt(document.getElementById('plan-reps').value, 10) || 10;
 			const baseWeight = parseFloat(document.getElementById('plan-weight').value) || 0;
 
 			for (let w = 1; w <= numWeeks; w++) {
@@ -1068,8 +1247,8 @@
 		}
 
 		function syncWeeklyWithBase() {
-			const baseSets = parseInt(document.getElementById('plan-sets').value) || 4;
-			const baseReps = parseInt(document.getElementById('plan-reps').value) || 10;
+			const baseSets = parseInt(document.getElementById('plan-sets').value, 10) || 4;
+			const baseReps = parseInt(document.getElementById('plan-reps').value, 10) || 10;
 			const baseWeight = parseFloat(document.getElementById('plan-weight').value) || 0;
 			const numWeeks = db.planType === "brunaccioni" ? 9 : db.customWeeks;
 			
@@ -1104,16 +1283,16 @@
 		}
 
 		function saveExerciseFromForm() {
-			const dayIdx = parseInt(document.getElementById('plan-day-select').value);
+			const dayIdx = parseInt(document.getElementById('plan-day-select').value, 10);
 			const name = document.getElementById('plan-exercise-name').value.trim();
-			const sets = parseInt(document.getElementById('plan-sets').value) || 4;
-			const reps = parseInt(document.getElementById('plan-reps').value) || 10;
+			const sets = parseInt(document.getElementById('plan-sets').value, 10) || 4;
+			const reps = parseInt(document.getElementById('plan-reps').value, 10) || 10;
 			const weight = parseFloat(document.getElementById('plan-weight').value) || 0;
-            const restSeconds = parseInt(document.getElementById('plan-rest').value) || 90;
+            const restSeconds = parseInt(document.getElementById('plan-rest').value, 10) || 90;
 			const progression = document.getElementById('plan-progression').value;
 			const step = parseFloat(document.getElementById('plan-step').value) || 2.5;
 			const note = document.getElementById('plan-note').value.trim();
-			const superSetWith = document.getElementById('plan-superset-select').value;
+			const superSetWith = document.getElementById('plan-superset-select').value; // ora è un id (o "")
 
 			if(isNaN(dayIdx) || !name) return alert("Compila il nome dell'esercizio.");
 
@@ -1121,38 +1300,32 @@
 			if (db.planType === "custom" && progression === "custom_table") {
 				const numWeeks = db.customWeeks;
 				for (let w = 1; w <= numWeeks; w++) {
-					const s = parseInt(document.getElementById(`week-${w}-sets`).value) || sets;
-					const r = parseInt(document.getElementById(`week-${w}-reps`).value) || reps;
+					const s = parseInt(document.getElementById(`week-${w}-sets`).value, 10) || sets;
+					const r = parseInt(document.getElementById(`week-${w}-reps`).value, 10) || reps;
 					const wt = parseFloat(document.getElementById(`week-${w}-weight`).value) || weight;
 					weeklyTargets.push({ sets: s, reps: r, weight: wt });
 				}
 			}
 
-			let oldName = "";
-			if (currentEditState.dayIdx !== null && currentEditState.exIdx !== null) {
-				const oldEx = db.plan.days[currentEditState.dayIdx].exercises[currentEditState.exIdx];
-				if (oldEx) oldName = oldEx.name;
+			const isEdit = currentEditState.dayIdx !== null && currentEditState.exIdx !== null;
+			const existingEx = isEdit ? db.plan.days[currentEditState.dayIdx].exercises[currentEditState.exIdx] : null;
+			const exId = existingEx && existingEx.id ? existingEx.id : genExId();
+			const oldName = existingEx ? existingEx.name : "";
+
+			// Rinomina sicura: il grafico raggruppa per nome, quindi propaga il nuovo nome allo storico.
+			if (isEdit && oldName && oldName !== name) {
+				db.history.forEach(log => { if (log.exercise === oldName) log.exercise = name; });
 			}
 
-			if (oldName && oldName !== name) {
-				db.plan.days[dayIdx].exercises.forEach(ex => {
-					if (ex.superSetWith === oldName) ex.superSetWith = name;
-				});
-			}
+			// Il link super serie viene applicato dopo l'inserimento; qui parte azzerato.
+			const exerciseData = { id: exId, name, sets, reps, weight, restSeconds, progression, step, note, weeklyTargets, superSetWith: "" };
 
-			const exerciseData = { name, sets, reps, weight, restSeconds, progression, step, note, weeklyTargets, superSetWith };
-
-			if (currentEditState.dayIdx !== null && currentEditState.exIdx !== null) {
+			if (isEdit) {
 				if (currentEditState.dayIdx !== dayIdx) {
-                    const oldEx = db.plan.days[currentEditState.dayIdx].exercises[currentEditState.exIdx];
-                    if (oldEx) {
-                        const oName = oldEx.name;
-                        const oPartner = oldEx.superSetWith;
-                        db.plan.days[currentEditState.dayIdx].exercises.forEach(ex => {
-                            if (ex.superSetWith === oName || (oPartner && ex.name === oPartner)) ex.superSetWith = "";
-                        });
-                    }
-					db.plan.days[currentEditState.dayIdx].exercises.splice(currentEditState.exIdx, 1);
+					// Spostamento in un altro giorno: rompi i link super serie nel giorno di origine.
+					const srcExs = db.plan.days[currentEditState.dayIdx].exercises;
+					srcExs.forEach(ex => { if (ex.superSetWith === exId) ex.superSetWith = ""; });
+					srcExs.splice(currentEditState.exIdx, 1);
 					db.plan.days[dayIdx].exercises.push(exerciseData);
 				} else {
 					db.plan.days[dayIdx].exercises[currentEditState.exIdx] = exerciseData;
@@ -1161,13 +1334,20 @@
 				db.plan.days[dayIdx].exercises.push(exerciseData);
 			}
 
-			db.plan.days[dayIdx].exercises.forEach(ex => {
-				if (ex.superSetWith === name) ex.superSetWith = "";
-			});
-
-			if (superSetWith) {
-				const partner = db.plan.days[dayIdx].exercises.find(ex => ex.name === superSetWith);
-				if (partner) partner.superSetWith = name;
+			// Applica il link super serie UNIDIREZIONALE: questo esercizio = PRIMARIO, partner = SECONDARIO.
+			const targetExs = db.plan.days[dayIdx].exercises;
+			const self = targetExs.find(e => e.id === exId);
+			if (self && superSetWith && superSetWith !== exId) {
+				const partner = targetExs.find(e => e.id === superSetWith);
+				if (partner) {
+					// Un partner può essere secondario di un solo primario.
+					targetExs.forEach(e => { if (e.id !== exId && e.superSetWith === partner.id) e.superSetWith = ""; });
+					// Questo esercizio non può essere anche secondario di un altro.
+					targetExs.forEach(e => { if (e.superSetWith === exId) e.superSetWith = ""; });
+					// Il partner diventa secondario: non può restare a sua volta primario.
+					partner.superSetWith = "";
+					self.superSetWith = partner.id;
+				}
 			}
 
 			saveData();
@@ -1220,21 +1400,18 @@
 		}
 
 		function removeExercise(dIdx, eIdx) {
-			if(confirm("Eliminare l'esercizio?")) { 
-				const ex = db.plan.days[dIdx].exercises[eIdx];
-				const name = ex.name;
-				const partnerName = ex.superSetWith;
+			if(confirm("Eliminare l'esercizio?")) {
+				const removedId = db.plan.days[dIdx].exercises[eIdx].id;
 
-				db.plan.days[dIdx].exercises.splice(eIdx, 1); 
+				db.plan.days[dIdx].exercises.splice(eIdx, 1);
 
+				// Chi puntava (come primario) all'esercizio rimosso perde il link.
 				db.plan.days[dIdx].exercises.forEach(e => {
-					if (e.superSetWith === name || (partnerName && e.name === partnerName)) {
-						e.superSetWith = "";
-					}
+					if (e.superSetWith === removedId) e.superSetWith = "";
 				});
 
-				saveData(); 
-				renderPlanTab(); 
+				saveData();
+				renderPlanTab();
 			}
 		}
 
@@ -1265,7 +1442,7 @@
 		function renderPlanTab() {
 			const daySelect = document.getElementById('plan-day-select');
 			if (!daySelect) return;
-			daySelect.innerHTML = db.plan.days.map((day, idx) => `<option value="${idx}">${day.name}</option>`).join('');
+			daySelect.innerHTML = db.plan.days.map((day, idx) => `<option value="${idx}">${esc(day.name)}</option>`).join('');
 			const container = document.getElementById('plan-preview-container');
 			if(!container) return;
 
@@ -1279,18 +1456,22 @@
 			container.innerHTML = db.plan.days.map((day, dIdx) => `
 				<div class="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow">
 					<div class="flex justify-between items-center mb-3 pb-2 border-b border-gray-700">
-						<h4 class="font-bold text-indigo-400 text-sm">${day.name}</h4>
+						<h4 class="font-bold text-indigo-400 text-sm">${esc(day.name)}</h4>
 						<button onclick="removeDay(${dIdx})" class="text-[10px] text-red-400 bg-red-950/30 px-2 py-0.5 rounded border border-red-900/40">Elimina Giorno</button>
 					</div>
 					<ul class="space-y-2">
 						${day.exercises.length === 0 ? '<li class="text-gray-500 text-xs py-1">Nessun esercizio inserito.</li>' : ''}
-						${day.exercises.map((ex, eIdx) => `
+						${day.exercises.map((ex, eIdx) => {
+							const partner = ex.superSetWith ? day.exercises.find(e => e.id === ex.superSetWith) : null;
+							const primaryOf = day.exercises.find(e => e.superSetWith === ex.id);
+							return `
 							<li class="bg-gray-700/40 p-2.5 rounded-lg text-xs">
 								<div class="flex justify-between items-center">
 									<div>
-										<span class="font-bold text-gray-200 text-sm">${ex.name}</span>
-										${ex.superSetWith ? `<span class="inline-block bg-purple-950/80 text-purple-300 border border-purple-800/60 text-[9px] font-bold px-1.5 py-0.5 rounded-md mt-0.5 ml-1.5">🔗 SS con: ${ex.superSetWith}</span>` : ''}
-										${ex.note ? `<span class="block text-[11px] text-amber-400 italic mt-0.5">📝 ${ex.note}</span>` : ''}
+										<span class="font-bold text-gray-200 text-sm">${esc(ex.name)}</span>
+										${partner ? `<span class="inline-block bg-purple-950/80 text-purple-300 border border-purple-800/60 text-[9px] font-bold px-1.5 py-0.5 rounded-md mt-0.5 ml-1.5">🔗 SS con: ${esc(partner.name)}</span>` : ''}
+										${primaryOf ? `<span class="inline-block bg-gray-900/80 text-gray-400 border border-gray-600/60 text-[9px] font-bold px-1.5 py-0.5 rounded-md mt-0.5 ml-1.5">↳ registrato con: ${esc(primaryOf.name)}</span>` : ''}
+										${ex.note ? `<span class="block text-[11px] text-amber-400 italic mt-0.5">📝 ${esc(ex.note)}</span>` : ''}
 									</div>
 									<div class="flex gap-2 items-center">
                                         <div class="flex flex-col gap-0.5 mr-1">
@@ -1308,7 +1489,8 @@
 									</span>
 								</div>
 							</li>
-						`).join('')}
+						`;
+						}).join('')}
 					</ul>
 				</div>
 			`).join('');
@@ -1327,7 +1509,7 @@
 				select.innerHTML = `<option value="">Nessun esercizio nel programma attuale</option>`;
 				return;
 			}
-			select.innerHTML = distinctExercises.map(ex => `<option value="${ex}">${ex}</option>`).join('');
+			select.innerHTML = distinctExercises.map(ex => `<option value="${esc(ex)}">${esc(ex)}</option>`).join('');
 		}
 
 		function buildVolumeChart() {
@@ -1463,13 +1645,13 @@
 				<div class="bg-gray-800 p-3 rounded-xl border border-gray-700 text-xs">
 					<div class="flex justify-between border-b border-gray-700 pb-1.5 mb-2">
 						<div>
-							<span class="font-bold text-indigo-400 text-sm">${log.exercise}</span>
-							<span class="text-gray-400 block text-[10px]">Settimana: ${log.week}</span>
+							<span class="font-bold text-indigo-400 text-sm">${esc(log.exercise)}</span>
+							<span class="text-gray-400 block text-[10px]">Settimana: ${esc(log.week)}</span>
 						</div>
-						<span class="text-gray-400 font-medium">${log.date}</span>
+						<span class="text-gray-400 font-medium">${esc(log.date)}</span>
 					</div>
 					<div class="grid grid-cols-2 gap-1 text-[11px] text-gray-300">
-						${log.sets.map((set, idx) => `<span>Serie ${idx+1}: <strong>${set.weight}kg</strong> x ${set.reps} rep</span>`).join('')}
+						${log.sets.map((set, idx) => `<span>Serie ${idx+1}: <strong>${esc(set.weight)}kg</strong> x ${esc(set.reps)} rep</span>`).join('')}
 					</div>
 				</div>
 			`).join('');
@@ -1488,10 +1670,43 @@
 
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register(`./sw.js?v=${APP_VERSION}`)
-                    .then(reg => console.log('Service Worker Registrato correttamente!', reg.scope))
+                    .then(reg => {
+                        console.log('Service Worker Registrato correttamente!', reg.scope);
+                        // #5c: rileva un nuovo SW in attesa e mostra il banner "Nuova versione".
+                        if (reg.waiting && navigator.serviceWorker.controller) {
+                            showUpdateBanner();
+                        }
+                        reg.addEventListener('updatefound', () => {
+                            const nw = reg.installing;
+                            if (!nw) return;
+                            nw.addEventListener('statechange', () => {
+                                // Nuovo SW installato mentre uno era già attivo = aggiornamento disponibile.
+                                if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+                                    showUpdateBanner();
+                                }
+                            });
+                        });
+                    })
                     .catch(err => console.error('Errore Service Worker:', err));
             }
 		});
+
+		// Banner discreto: l'utente decide QUANDO ricaricare per applicare l'aggiornamento.
+		function showUpdateBanner() {
+			if (document.getElementById('update-banner')) return; // già mostrato
+			const banner = document.createElement('div');
+			banner.id = 'update-banner';
+			banner.className = 'fixed bottom-20 left-0 right-0 z-[60] px-4';
+			banner.innerHTML = `
+				<div class="max-w-md mx-auto bg-indigo-600 text-white rounded-xl shadow-lg p-3 flex items-center justify-between gap-3">
+					<span class="text-xs font-semibold">🔄 Nuova versione disponibile</span>
+					<div class="flex gap-2">
+						<button onclick="location.reload()" class="bg-white text-indigo-700 font-bold px-3 py-1 rounded-lg text-xs">Ricarica</button>
+						<button onclick="document.getElementById('update-banner')?.remove()" class="text-indigo-100 px-2 text-xs">Dopo</button>
+					</div>
+				</div>`;
+			document.body.appendChild(banner);
+		}
 	</script>
 </body>
 </html>

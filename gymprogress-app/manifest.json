@@ -1,16 +1,23 @@
 {
   "name": "GymProgress Pro",
   "short_name": "GymProgress",
+  "description": "Tracker di allenamento in palestra: pianifica la scheda, registra le serie, segui la progressione settimanale e monitora il volume. Funziona offline.",
+  "id": "/index.html",
+  "lang": "it",
+  "dir": "ltr",
   "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#111827",
   "theme_color": "#1f2937",
+  "categories": ["health", "fitness", "sports"],
   "icons": [
     {
       "src": "icon.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }
