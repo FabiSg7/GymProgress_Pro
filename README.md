@@ -92,11 +92,14 @@ I dati vivono nel `localStorage` del browser: **cancellare i dati di navigazione
 
 ## 📝 Changelog
 
+### v1.2.2
+- **Fix icona**: rimosso il bordo bianco attorno all'icona dell'app. Era causato dal `purpose: "any maskable"` introdotto nella 1.2.1: trattata come *maskable*, l'icona (che riempie tutto il canvas, senza "safe zone") veniva rimpicciolita e circondata da un margine. Riportato a `purpose: "any"`. Il supporto *maskable* corretto richiede un'icona dedicata (tracciato come attività futura).
+
 ### v1.2.1
 - **Service Worker resiliente**: gli asset locali sono obbligatori, i CDN (Tailwind, Chart.js) sono best-effort → un CDN irraggiungibile non fa più fallire l'intera cache offline. Aggiunto **runtime caching** (le risorse scaricate a runtime vengono salvate) e un **banner "Nuova versione disponibile → Ricarica"** quando l'app si aggiorna.
 - **Protocollo Brunaccioni**: le ripetizioni calcolate non scendono più sotto 1 (le settimane con `-1`/`-2` rep erano potenzialmente ≤ 0 con reps base basse).
 - **Coerenza dati**: la settimana viene salvata nello storico come numero; `parseInt` con radix esplicita ovunque.
-- **Manifest PWA**: aggiunti `description`, `id`, `lang`, `scope`, `categories` e icona marcata `maskable` per migliorare l'installabilità.
+- **Manifest PWA**: aggiunti `description`, `id`, `lang`, `scope`, `categories` per migliorare l'installabilità.
 - L'input di importazione backup mantiene volutamente `accept="*/*"`: su mobile il filtro `.json` rendeva il file non selezionabile dalle scorciatoie (la validazione `.json` avviene comunque nel codice).
 
 ### v1.2.0

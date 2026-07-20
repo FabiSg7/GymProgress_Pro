@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gym-tracker-v1.2.1';
+const CACHE_NAME = 'gym-tracker-v1.2.2';
 
 // Asset locali: OBBLIGATORI per il funzionamento offline (cache atomica).
 const LOCAL_ASSETS = [
