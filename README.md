@@ -92,6 +92,12 @@ I dati vivono nel `localStorage` del browser: **cancellare i dati di navigazione
 
 ## 📝 Changelog
 
+### v1.3.0
+- **Sessione persistente al cambio tab**: cambiando tab durante un esercizio (per errore o per consultare altro) e tornando su *Workout*, le serie già registrate e il timer di recupero **non vengono più azzerati** — la sessione riprende esattamente da dov'era (il timer continua a scorrere anche mentre si è su un altro tab). La reinizializzazione avviene solo quando non c'è una sessione in corso.
+- **Avviso di fine recupero più forte**: suono più squillante e udibile (onda *square*, volume più alto, 3 beep, risveglio dell'AudioContext su mobile) e vibrazione dal pattern più lungo e insistente. *Nota*: l'API di vibrazione del browser non consente di regolare l'intensità fisica (fissata dall'hardware del telefono), solo la durata/ripetizione del pattern.
+- **Indicatore ultima serie**: accanto a "Registra Serie N" compare **"(ultima)"** quando la prossima serie da registrare è l'ultima prevista dal target; una volta salvata, quella serie viene **evidenziata in rosso chiaro** nella lista. La scelta se proseguire con altre serie o completare l'esercizio resta sempre libera.
+- **Layout input Workout**: nel tab *Workout* le caselle sono ora **Ripetizioni a sinistra / Carico (kg) a destra** (invertite rispetto a prima); coerente anche nelle super serie e nella lista delle serie registrate (mostrata come "rep x kg").
+
 ### v1.2.2
 - **Fix icona**: rimosso il bordo bianco attorno all'icona dell'app. Era causato dal `purpose: "any maskable"` introdotto nella 1.2.1: trattata come *maskable*, l'icona (che riempie tutto il canvas, senza "safe zone") veniva rimpicciolita e circondata da un margine. Riportato a `purpose: "any"`. Il supporto *maskable* corretto richiede un'icona dedicata (tracciato come attività futura).
 
