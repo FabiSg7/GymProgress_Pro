@@ -1,0 +1,44 @@
+<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<body style="background:#111;color:#eee;font-family:sans-serif;padding:8px">
+<h3>GymProgress Decoder v4</h3>
+<p>Scatta le foto dei QR con la <b>fotocamera del telefono</b>, poi qui premi
+"Scegli file" e <b>seleziona piu foto dalla galleria</b>. Ti dico foto per foto se sono OK.</p>
+<input id=inp type=file accept=image/* multiple>
+<button onclick=AZ()>Azzera tutto</button>
+<div id=res style="font-size:13px;margin:8px 0;white-space:pre-wrap"></div>
+<hr><div id=o style="font-size:15px"></div>
+<div id=log style="font-size:11px;color:#9cf;white-space:pre-wrap;margin-top:8px"></div>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js" onload="LG('jsQR pronto')" onerror="LG('jsQR NON caricato: serve internet')"></script>
+<script>
+var B='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:';
+var N={1:'index.html',2:'sw.js',3:'manifest.json',4:'README.md'};
+var K='gpqr4';
+var F={};try{F=JSON.parse(localStorage.getItem(K)||'{}')}catch(e){F={}}
+function LG(m){document.getElementById('log').textContent+=m+'\n'}
+function SV(){try{localStorage.setItem(K,JSON.stringify(F))}catch(e){LG('save fail '+e)}}
+function AZ(){if(confirm('Azzerare tutti i QR letti?')){F={};localStorage.removeItem(K);R();document.getElementById('res').textContent=''}}
+LG('BarcodeDetector: '+('BarcodeDetector' in window?'si':'no (uso jsQR)'));
+function d45(s){var o=[],i;for(i=0;i<s.length;i+=3){var c=s.substr(i,3);if(c.length==3){var n=B.indexOf(c[0])+B.indexOf(c[1])*45+B.indexOf(c[2])*2025;o.push(n>>8,n&255)}else if(c.length==2){o.push(B.indexOf(c[0])+B.indexOf(c[1])*45)}}return new Uint8Array(o)}
+function add(t){var m=/^GP:(\d+):(\d+):(\d+):([^]*)$/.exec(t);if(!m)return null;var f=+m[1];(F[f]=F[f]||{n:+m[3],p:{}}).p[+m[2]]=m[4];SV();return N[f]+' '+m[2]+'/'+m[3]}
+function R(){var h='';for(var f in F){var o=F[f],got=Object.keys(o.p).length,miss=[];for(var i=1;i<=o.n;i++)if(!o.p[i])miss.push(i);h+='<b>'+(N[f]||f)+'</b> '+got+'/'+o.n+(got==o.n?' <button onclick=S('+f+')>Salva file</button>':' mancano: '+miss.join(','))+'<br>'}document.getElementById('o').innerHTML=h||'(nessun QR ancora)'}
+async function S(f){var o=F[f],e='';for(var i=1;i<=o.n;i++)e+=o.p[i];var gz=d45(e);var r=await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([r]));a.download=N[f]||('F'+f);a.click();LG('scaricato '+N[f]+' '+r.byteLength+'B')}
+async function tryDecode(bmp){
+ if('BarcodeDetector' in window){try{var d=new BarcodeDetector({formats:['qr_code']});var r=await d.detect(bmp);if(r&&r.length)return r[0].rawValue}catch(e){}}
+ if(window.jsQR){for(var mx of [2000,1400,1000,700]){var sc=Math.min(1,mx/Math.max(bmp.width,bmp.height)),w=Math.round(bmp.width*sc),h=Math.round(bmp.height*sc);var cv=document.createElement('canvas');cv.width=w;cv.height=h;cv.getContext('2d').drawImage(bmp,0,0,w,h);var q=jsQR(cv.getContext('2d').getImageData(0,0,w,h).data,w,h,{inversionAttempts:'attemptBoth'});if(q)return q.data}}
+ return null}
+async function p(files){
+ var out=[];
+ for(var f of files){
+   var line;
+   try{var bmp=await createImageBitmap(f);var t=await tryDecode(bmp);
+     if(t){var info=add(t);line=info?('OK   '+f.name+' -> '+info):('IGNORATA '+f.name+' (QR non del set)')}
+     else line='SCARTA '+f.name+' -> nessun QR leggibile, RIFAI la foto (piu vicino/a fuoco)';
+   }catch(err){line='ERRORE '+f.name+' -> '+err}
+   out.push(line);
+ }
+ document.getElementById('res').textContent=out.join('\n');
+ R();navigator.vibrate&&navigator.vibrate(40);
+}
+document.getElementById('inp').addEventListener('change',function(e){var fs=[].slice.call(e.target.files);p(fs).then(function(){e.target.value=''})});
+R();
+</script>
