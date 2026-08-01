@@ -62,7 +62,7 @@
             <div id="workout-flow" class="space-y-4">
                 <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow">
                     <label for="active-exercise-select" class="block text-sm font-medium text-gray-400 mb-2">Seleziona Esercizio</label>
-                    <select id="active-exercise-select" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2.5 text-white" onchange="startExerciseSession()">
+                    <select id="active-exercise-select" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2.5 text-white" onchange="startExerciseSession(); persistWorkoutCursor()">
                     </select>
                 </div>
 
@@ -151,60 +151,106 @@
                             <select id="plan-day-select" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white" onchange="populateSuperSetSelect()"></select>
                         </div>
                         <div>
-                            <label for="plan-exercise-name" class="block text-xs text-gray-400 mb-1">Nome Esercizio</label>
-                            <input type="text" id="plan-exercise-name" placeholder="es. Panca Piana" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white">
-                        </div>
-                    </div>
-                    
-                    <div class="grid grid-cols-4 gap-2">
-                        <div>
-                            <label for="plan-sets" class="block text-xs text-gray-400 mb-1">Serie Base</label>
-                            <input type="number" id="plan-sets" value="4" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-xs" oninput="updateWeeklyInputsRealtime()">
-                        </div>
-                        <div>
-                            <label for="plan-reps" class="block text-xs text-gray-400 mb-1">Rep Base</label>
-                            <input type="number" id="plan-reps" value="10" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-xs" oninput="updateWeeklyInputsRealtime()">
-                        </div>
-                        <div>
-                            <label for="plan-weight" class="block text-xs text-gray-400 mb-1">Peso (kg)</label>
-                            <input type="number" id="plan-weight" value="0" step="0.1" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-xs" oninput="updateWeeklyInputsRealtime()">
-                        </div>
-                        <div>
-                            <label for="plan-rest" class="block text-xs text-gray-400 mb-1">Recup. (s)</label>
-                            <input type="number" id="plan-rest" value="90" step="5" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-xs">
-                        </div>
-                    </div>
-                    
-                    <div class="grid grid-cols-2 gap-2">
-                        <div>
-                            <label for="plan-progression" class="block text-xs text-gray-400 mb-1">Tipo Progressione</label>
-                            <select id="plan-progression" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white" onchange="toggleStepInputVisibility()">
+                            <label for="plan-entry-type" class="block text-xs text-gray-400 mb-1">Tipo</label>
+                            <select id="plan-entry-type" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white font-semibold" onchange="toggleExerciseFormType()">
+                                <option value="single">🏋️ Esercizio Singolo</option>
+                                <option value="circuit">🔄 Circuito</option>
                             </select>
-                        </div>
-                        <div id="step-increment-container" class="hidden">
-                            <label for="plan-step" class="block text-xs text-gray-400 mb-1">Incr. kg a settimana</label>
-                            <input type="number" id="plan-step" value="2.5" step="0.5" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white">
-                        </div>
-                        <div class="col-span-2">
-                            <label for="plan-superset-select" class="block text-xs text-gray-400 mb-1">🔗 Collega in Super Serie (SS)</label>
-                            <select id="plan-superset-select" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white">
-                                <option value="">-- Nessuna Super Serie --</option>
-                            </select>
-                        </div>
-                        <div id="generic-note-container" class="col-span-2">
-                            <label for="plan-note" class="block text-xs text-gray-400 mb-1">Nota Logistica / Posizione</label>
-                            <input type="text" id="plan-note" placeholder="es. Zona Cavi / Panca 30°" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white">
                         </div>
                     </div>
 
-                    <div id="weekly-table-container" class="hidden bg-gray-900/60 p-3.5 rounded-lg border border-gray-700 space-y-2.5 col-span-2">
-                        <div class="flex justify-between items-center mb-1">
-                            <h4 class="text-xs font-bold text-indigo-400 flex items-center gap-1">✍️ Target per Settimana</h4>
-                            <button type="button" onclick="syncWeeklyWithBase()" class="text-[10px] text-indigo-300 hover:text-indigo-200 underline font-semibold transition-colors">
-                                🔄 Sincronizza con i valori base
-                            </button>
+                    <div>
+                        <label for="plan-exercise-name" class="block text-xs text-gray-400 mb-1" id="plan-name-label">Nome Esercizio</label>
+                        <input type="text" id="plan-exercise-name" placeholder="es. Panca Piana" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white">
+                    </div>
+
+                    <!-- CAMPI ESERCIZIO SINGOLO -->
+                    <div id="single-exercise-fields" class="space-y-3">
+                        <div>
+                            <label for="plan-measure" class="block text-xs text-gray-400 mb-1">Misura</label>
+                            <select id="plan-measure" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-xs" onchange="toggleMeasureLabels()">
+                                <option value="reps">🔢 Ripetizioni</option>
+                                <option value="time">⏱️ Tempo (secondi sotto tensione)</option>
+                            </select>
                         </div>
-                        <div id="weekly-rows" class="space-y-1.5 max-h-56 overflow-y-auto pr-1"></div>
+                        <div class="grid grid-cols-4 gap-2">
+                            <div>
+                                <label for="plan-sets" class="block text-xs text-gray-400 mb-1">Serie Base</label>
+                                <input type="number" id="plan-sets" value="4" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-xs" oninput="updateWeeklyInputsRealtime()">
+                            </div>
+                            <div>
+                                <label for="plan-reps" class="block text-xs text-gray-400 mb-1" id="plan-reps-label">Rep Base</label>
+                                <input type="number" id="plan-reps" value="10" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-xs" oninput="updateWeeklyInputsRealtime()">
+                            </div>
+                            <div>
+                                <label for="plan-weight" class="block text-xs text-gray-400 mb-1">Peso (kg)</label>
+                                <input type="number" id="plan-weight" value="0" step="0.1" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-xs" oninput="updateWeeklyInputsRealtime()">
+                            </div>
+                            <div>
+                                <label for="plan-rest" class="block text-xs text-gray-400 mb-1">Recup. (s)</label>
+                                <input type="number" id="plan-rest" value="90" step="5" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-xs">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label for="plan-progression" class="block text-xs text-gray-400 mb-1">Tipo Progressione</label>
+                                <select id="plan-progression" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white" onchange="toggleStepInputVisibility()">
+                                </select>
+                            </div>
+                            <div id="step-increment-container" class="hidden">
+                                <label for="plan-step" class="block text-xs text-gray-400 mb-1">Incr. kg a settimana</label>
+                                <input type="number" id="plan-step" value="2.5" step="0.5" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white">
+                            </div>
+                            <div class="col-span-2">
+                                <label for="plan-superset-select" class="block text-xs text-gray-400 mb-1">🔗 Collega in Super Serie (SS)</label>
+                                <select id="plan-superset-select" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white">
+                                    <option value="">-- Nessuna Super Serie --</option>
+                                </select>
+                            </div>
+                            <div id="generic-note-container" class="col-span-2">
+                                <label for="plan-note" class="block text-xs text-gray-400 mb-1">Nota Logistica / Posizione</label>
+                                <input type="text" id="plan-note" placeholder="es. Zona Cavi / Panca 30°" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white">
+                            </div>
+                        </div>
+
+                        <div id="weekly-table-container" class="hidden bg-gray-900/60 p-3.5 rounded-lg border border-gray-700 space-y-2.5 col-span-2">
+                            <div class="flex justify-between items-center mb-1">
+                                <h4 class="text-xs font-bold text-indigo-400 flex items-center gap-1">✍️ Target per Settimana</h4>
+                                <button type="button" onclick="syncWeeklyWithBase()" class="text-[10px] text-indigo-300 hover:text-indigo-200 underline font-semibold transition-colors">
+                                    🔄 Sincronizza con i valori base
+                                </button>
+                            </div>
+                            <div id="weekly-rows" class="space-y-1.5 max-h-56 overflow-y-auto pr-1"></div>
+                        </div>
+                    </div>
+
+                    <!-- CAMPI CIRCUITO -->
+                    <div id="circuit-fields" class="hidden space-y-3">
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label for="plan-circuit-rounds" class="block text-xs text-gray-400 mb-1">Numero Giri</label>
+                                <input type="number" id="plan-circuit-rounds" value="3" min="1" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-xs">
+                            </div>
+                            <div>
+                                <label for="plan-circuit-rest" class="block text-xs text-gray-400 mb-1">Recupero fine giro (s)</label>
+                                <input type="number" id="plan-circuit-rest" value="60" step="5" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-xs">
+                            </div>
+                        </div>
+                        <div>
+                            <label for="plan-circuit-note" class="block text-xs text-gray-400 mb-1">Nota Logistica / Posizione</label>
+                            <input type="text" id="plan-circuit-note" placeholder="es. Zona Corpo Libero" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white">
+                        </div>
+                        <div class="bg-gray-900/60 p-3.5 rounded-lg border border-gray-700 space-y-2.5">
+                            <div class="flex justify-between items-center">
+                                <h4 class="text-xs font-bold text-amber-400 flex items-center gap-1">🔁 Esercizi del circuito</h4>
+                                <button type="button" onclick="addCircuitDraftItem()" class="text-[10px] text-amber-300 hover:text-amber-200 underline font-semibold transition-colors">
+                                    ➕ Aggiungi esercizio
+                                </button>
+                            </div>
+                            <div id="circuit-items-rows" class="space-y-2"></div>
+                            <p class="text-[10px] text-gray-500 italic">Lascia il peso a 0 per esercizi a corpo libero.</p>
+                        </div>
                     </div>
 
                     <div class="flex gap-2 pt-2">
@@ -303,7 +349,7 @@
 
     <script>
         // Parametro Globale Unico di Versione dell'Applicazione
-        const APP_VERSION = '1.3.0';
+        const APP_VERSION = '1.7.0';
 
 		// Database pre-caricato completo
 		const initialPlan = {
@@ -335,7 +381,12 @@
 			planType: localStorage.getItem('gym_plan_type') || "brunaccioni", 
 			customWeeks: localStorage.getItem('gym_custom_weeks') !== null ? parseInt(localStorage.getItem('gym_custom_weeks'), 10) : 4,
 			plan: JSON.parse(localStorage.getItem('gym_plan')) || JSON.parse(JSON.stringify(initialPlan)),
-			archives: JSON.parse(localStorage.getItem('gym_archives')) || []
+			archives: JSON.parse(localStorage.getItem('gym_archives')) || [],
+			// Cursore persistente della POSIZIONE corrente nel workout: { week, dayIdx, exIdx }.
+			// Sostituisce il vecchio calcolo del giorno da (last_day_index+1), che avanzava a OGNI
+			// esercizio salvato e spingeva al giorno successivo anche a giorno non finito, e non
+			// salvava affatto la settimana (che ripartiva da 1 al cambio tab) — fix #1.
+			cursor: JSON.parse(localStorage.getItem('gym_cursor')) || null
 		};
 
 		// Contatore per gli id stabili: dichiarato PRIMA di migrateData() (che usa genExId)
@@ -351,9 +402,35 @@
 		let currentEditState = { dayIdx: null, exIdx: null };
 		let volumeChartInstance = null;
 
+		// --- Stato modalità Workout ---
+		// 'single'   = esercizio normale (una serie per volta)
+		// 'superset' = super serie A+B (un "giro" A+B per volta)
+		// 'circuit'  = circuito: N esercizi in fila senza pausa, poi 1 recupero, ripetuto per R giri
+		// Guida la logica di add/edit/render/save al posto del vecchio probing del DOM.
+		let currentSessionMode = 'single';
+		let currentCircuit = null;   // riferimento all'oggetto circuito attivo nel Workout (o null)
+		let circuitDraftItems = [];  // bozza degli item del circuito nel form di Pianificazione
+
+		// Riferimenti all'esercizio (e all'eventuale partner di super serie) attivi nel Workout:
+		// servono a conoscere la MISURA (reps vs tempo) in fase di add/edit/save senza risondare il piano.
+		let currentExerciseRef = null;
+		let currentPartnerRef = null;
+
+		// Cronometri "tempo sotto tensione" attivi, keyed per id dell'input secondi che pilotano.
+		// Ogni voce: { startEpoch, base, intervalId }. Contano in SALITA e riempiono l'input.
+		let exerciseStopwatches = {};
+
         let timerInterval = null;
         let timerTimeLeft = 0;
         let defaultRestSeconds = 90;
+        // Istante assoluto (ms epoch) in cui il recupero deve terminare. Il countdown ricava
+        // il rimanente da qui e non dal semplice decremento: così, se il browser CONGELA il
+        // timer JS a schermo spento / app in background, alla riapertura il tempo è comunque
+        // corretto e l'alert scatta subito se il tempo è già scaduto (fix background timer).
+        let timerEndTime = null;
+        // true quando l'alert di fine recupero è già stato emesso per il ciclo corrente:
+        // evita doppi trigger (es. tick residuo + ricalcolo su visibilitychange).
+        let alertFired = false;
 
 		// --- Identità stabile degli esercizi (id per-slot) ---
 		// (__exIdCounter è dichiarato più in alto, prima della chiamata a migrateData)
@@ -437,6 +514,24 @@
 			localStorage.setItem('gym_custom_weeks', db.customWeeks);
 			localStorage.setItem('gym_plan', JSON.stringify(db.plan));
 			localStorage.setItem('gym_archives', JSON.stringify(db.archives));
+			localStorage.setItem('gym_cursor', JSON.stringify(db.cursor));
+		}
+
+		// Legge la posizione corrente (settimana/giorno/esercizio) dai tre selettori del Workout
+		// e la salva nel cursore persistente. Chiamata a ogni cambio di selezione e a ogni
+		// avanzamento, così tornando sul tab Workout si ritrova ESATTAMENTE dov'era (fix #1).
+		function persistWorkoutCursor() {
+			const weekSel = document.getElementById('workout-week-select');
+			const daySel = document.getElementById('workout-day-select');
+			const exSel = document.getElementById('active-exercise-select');
+			if (!weekSel || !daySel || !exSel) return;
+			if (weekSel.value === "" || daySel.value === "") return;
+			db.cursor = {
+				week: parseInt(weekSel.value, 10) || 1,
+				dayIdx: parseInt(daySel.value, 10) || 0,
+				exIdx: exSel.value === "" ? 0 : (parseInt(exSel.value, 10) || 0)
+			};
+			saveData();
 		}
 
 		function switchTab(tabId) {
@@ -541,14 +636,25 @@
 			}
 			document.getElementById('workout-flow')?.classList.remove('hidden');
 			daySelect.innerHTML = db.plan.days.map((day, idx) => `<option value="${idx}">${esc(day.name.split(":")[0])}</option>`).join('');
-			
-			if (db.last_day_index !== -1 && db.last_day_index < db.plan.days.length) {
-				daySelect.value = (db.last_day_index + 1) % db.plan.days.length;
-			} else {
-				daySelect.value = 0;
+
+			// Ripristina la POSIZIONE (settimana + giorno + esercizio) dal cursore persistente,
+			// con clamp ai limiti correnti del piano. Retrocompat: se il cursore non esiste ancora
+			// (prima installazione o dati pre-1.7.0) parte da Settimana 1 · Giorno 0 · Esercizio 0.
+			// Sostituisce il vecchio (last_day_index+1)%days.length, che avanzava di giorno a OGNI
+			// esercizio salvato e non salvava la settimana (fix #1).
+			const weekSelect = document.getElementById('workout-week-select');
+			const weekCount = db.planType === 'brunaccioni' ? 9 : db.customWeeks;
+			let restoreWeek = 1, restoreDay = 0, restoreEx = 0;
+			if (db.cursor) {
+				restoreWeek = Math.min(Math.max(1, db.cursor.week || 1), weekCount);
+				restoreDay = Math.min(Math.max(0, db.cursor.dayIdx || 0), db.plan.days.length - 1);
+				restoreEx = Math.max(0, db.cursor.exIdx || 0);
 			}
+			if (weekSelect) weekSelect.value = restoreWeek;
+			daySelect.value = restoreDay;
+
 			updateLastDoneBadge();
-			loadPlannedExercises();
+			loadPlannedExercises(restoreEx);
 		}
 
 		function updateLastDoneBadge() {
@@ -561,7 +667,9 @@
 			}
 		}
 
-		function loadPlannedExercises() {
+		// `restoreExIdx` (opzionale): indice esercizio da riselezionare dopo aver ricostruito il menu
+		// (usato dal ripristino del cursore). Se assente o non più valido, resta la prima opzione.
+		function loadPlannedExercises(restoreExIdx) {
 			const dayIdx = document.getElementById('workout-day-select').value;
 			const activeExSelect = document.getElementById('active-exercise-select');
 			if (!activeExSelect) return;
@@ -577,7 +685,144 @@
 				.map((ex, idx) => ({ ex, idx }))
 				.filter(o => !isSecondaryOfSuperSet(dayIdx, o.ex.id))
 				.map(o => `<option value="${o.idx}">${esc(o.ex.name)}</option>`).join('');
+
+			// Riseleziona l'esercizio del cursore se ancora presente tra le opzioni (un secondario
+			// di super serie non c'è: in tal caso resta la prima opzione, comportamento invariato).
+			if (restoreExIdx !== undefined && restoreExIdx !== null) {
+				const wanted = String(restoreExIdx);
+				if ([...activeExSelect.options].some(o => o.value === wanted)) {
+					activeExSelect.value = wanted;
+				}
+			}
 			startExerciseSession();
+			persistWorkoutCursor(); // salva la posizione (settimana/giorno/esercizio) correnti
+		}
+
+		// --- Misura dell'esercizio: 'reps' (default) | 'time' (secondi sotto tensione) ---
+		// Retrocompat: un oggetto senza campo `measure` è trattato come 'reps'.
+		function exMeasure(o) { return (o && o.measure === 'time') ? 'time' : 'reps'; }
+		function isTimed(o) { return exMeasure(o) === 'time'; }
+		// Etichetta breve della quantità misurata (per label input, storico, grafico).
+		function measureUnit(o) { return isTimed(o) ? 'sec' : 'rep'; }
+
+		// Formatta secondi come m:ss (per display cronometro).
+		function fmtSecs(total) {
+			total = Math.max(0, Math.floor(total));
+			const m = Math.floor(total / 60), s = total % 60;
+			return `${m}:${String(s).padStart(2, '0')}`;
+		}
+
+		// HTML di un blocco input "quantità + carico" per un esercizio nel Workout.
+		// - reps  → campo numerico Ripetizioni
+		// - time  → cronometro conta-secondi (Avvia/Stop/Azzera) che riempie il campo Secondi (editabile)
+		// `repsId`/`weightId` sono gli id espliciti dei due input (così funziona sia per singolo/super
+		// serie — 'input-reps'/'input-weight' — sia per gli item del circuito — 'input-circuit-reps-N').
+		// `preReps`/`preWeight` sono i valori di precompilazione (target).
+		function measureInputsHtml(o, repsId, weightId, preReps, preWeight) {
+			// Per gli esercizi a TEMPO: NIENTE casella modificabile (creava un doppione col display).
+			// Il valore dei secondi vive in un input NASCOSTO (stesso `repsId`, così tutto il codice
+			// di lettura resta invariato); l'elemento visivo è il CRONOMETRO in m:ss, che è la sola
+			// fonte del numero. Il target `preReps` resta come semplice riferimento nell'etichetta.
+			const qtyBlock = isTimed(o)
+				? `<div>
+						<label class="block text-[10px] text-gray-400 mb-1">Cronometro <span class="text-gray-500">(target ${preReps}s)</span></label>
+						<input type="hidden" id="${repsId}" value="0" data-target="${preReps}">
+						<div class="flex flex-wrap gap-2 items-center">
+							<span id="stopwatch-disp-${repsId}" class="font-mono font-bold text-emerald-400 text-2xl w-16 text-center">0:00</span>
+							<button type="button" id="stopwatch-btn-${repsId}" onclick="toggleStopwatch('${repsId}')" class="bg-emerald-600 hover:bg-emerald-700 text-slate-900 font-bold px-3 py-1.5 rounded text-xs whitespace-nowrap">▶ Avvia</button>
+							<button type="button" onclick="resetStopwatch('${repsId}')" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded text-xs whitespace-nowrap">Azzera</button>
+						</div>
+					</div>`
+				: `<div>
+						<label for="${repsId}" class="block text-[10px] text-gray-400 mb-1">Ripetizioni</label>
+						<input type="number" id="${repsId}" value="${preReps}" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-xs">
+					</div>`;
+			const weightBlock = `<div>
+					<label for="${weightId}" class="block text-[10px] text-gray-400 mb-1">Carico (kg)</label>
+					<input type="number" id="${weightId}" step="0.5" value="${preWeight}" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-xs">
+				</div>`;
+			// A TEMPO: layout IMPILATO (cronometro a larghezza piena, Carico sotto). La griglia a 2
+			// colonne stipava il cronometro (display + Avvia + Azzera) in metà schermo e "Azzera"
+			// sfondava sulla colonna "Carico" su telefoni stretti (fix #3). A REPS: griglia 2 colonne.
+			if (isTimed(o)) {
+				return `<div class="space-y-3">${qtyBlock}${weightBlock}</div>`;
+			}
+			return `<div class="grid grid-cols-2 gap-3">${qtyBlock}${weightBlock}</div>`;
+		}
+
+		// Riga di target leggibile: "3 set x 12 rep @ 15 kg" oppure "3 set x 45 sec @ 0 kg".
+		function targetLine(o, sets, qty, weight) {
+			return `${sets} set x ${qty} ${measureUnit(o)} @ ${weight} kg`;
+		}
+
+		// --- Cronometro conta-secondi (tempo sotto tensione) ---
+		// Multi-istanza: keyed per l'id dell'input Secondi che pilota (es. 'input-reps', 'input-reps-partner',
+		// 'input-circuit-reps-2'). Conta in SALITA a partire dal valore già presente nell'input.
+		function toggleStopwatch(repsId) {
+			if (exerciseStopwatches[repsId]) { stopStopwatch(repsId); return; }
+			const input = document.getElementById(repsId);
+			const base = input && input.value !== "" ? (parseInt(input.value, 10) || 0) : 0;
+			// Target (secondi) dall'attributo data-target dell'input nascosto: al suo raggiungimento
+			// scatta l'avviso vibrazione+suono UNA volta, senza fermare il cronometro (fix #2).
+			const target = input ? (parseInt(input.getAttribute('data-target'), 10) || 0) : 0;
+			// targetFired: guardia anti-doppio-avviso. Se il cronometro riparte (Riprendi) da un valore
+			// già ≥ target, non ri-suona; se riparte da sotto il target, l'avviso può riscattare.
+			const sw = { base, startEpoch: Date.now(), intervalId: null, target, targetFired: base >= target && target > 0 };
+			sw.intervalId = setInterval(() => tickStopwatch(repsId), 200);
+			exerciseStopwatches[repsId] = sw;
+			const btn = document.getElementById(`stopwatch-btn-${repsId}`);
+			if (btn) { btn.innerText = "⏸ Stop"; btn.className = "bg-red-500 hover:bg-red-600 text-white font-bold px-2 py-1 rounded text-[10px]"; }
+			tickStopwatch(repsId);
+		}
+		function tickStopwatch(repsId) {
+			const sw = exerciseStopwatches[repsId];
+			if (!sw) return;
+			const elapsed = sw.base + Math.floor((Date.now() - sw.startEpoch) / 1000);
+			const disp = document.getElementById(`stopwatch-disp-${repsId}`);
+			if (disp) disp.innerText = fmtSecs(elapsed);
+			const input = document.getElementById(repsId);
+			if (input) input.value = elapsed; // il cronometro RIEMPIE il campo secondi (correggibile a mano)
+			// Raggiunto il target: stessa routine vibrazione+suono del timer di recupero, UNA sola volta.
+			// Il cronometro CONTINUA a contare (utile per andare oltre il target); il display lampeggia
+			// brevemente in ambra per segnalare visivamente il traguardo.
+			if (!sw.targetFired && sw.target > 0 && elapsed >= sw.target) {
+				sw.targetFired = true;
+				buzzAndBeep();
+				if (disp) {
+					disp.classList.add('text-amber-400');
+					disp.classList.remove('text-emerald-400');
+				}
+			}
+		}
+		function stopStopwatch(repsId) {
+			const sw = exerciseStopwatches[repsId];
+			if (!sw) return;
+			clearInterval(sw.intervalId);
+			tickStopwatch(repsId); // fissa il valore finale nell'input
+			delete exerciseStopwatches[repsId];
+			const btn = document.getElementById(`stopwatch-btn-${repsId}`);
+			if (btn) { btn.innerText = "▶ Riprendi"; btn.className = "bg-emerald-600 hover:bg-emerald-700 text-slate-900 font-bold px-2 py-1 rounded text-[10px]"; }
+		}
+		function resetStopwatch(repsId) {
+			const sw = exerciseStopwatches[repsId];
+			if (sw) { clearInterval(sw.intervalId); delete exerciseStopwatches[repsId]; }
+			const input = document.getElementById(repsId);
+			if (input) input.value = 0;
+			const disp = document.getElementById(`stopwatch-disp-${repsId}`);
+			if (disp) {
+				disp.innerText = "0:00";
+				// Ripristina il colore base (tickStopwatch lo porta ad ambra al raggiungimento del target).
+				disp.classList.remove('text-amber-400');
+				disp.classList.add('text-emerald-400');
+			}
+			const btn = document.getElementById(`stopwatch-btn-${repsId}`);
+			if (btn) { btn.innerText = "▶ Avvia"; btn.className = "bg-emerald-600 hover:bg-emerald-700 text-slate-900 font-bold px-2 py-1 rounded text-[10px]"; }
+		}
+		// Ferma e scarta TUTTI i cronometri attivi: chiamato quando si (ri)costruisce una sessione,
+		// così un cronometro lasciato attivo non continua a scrivere su un input non più in pagina.
+		function clearAllStopwatches() {
+			Object.keys(exerciseStopwatches).forEach(id => clearInterval(exerciseStopwatches[id].intervalId));
+			exerciseStopwatches = {};
 		}
 
 		function startExerciseSession() {
@@ -586,7 +831,17 @@
 			const week = parseInt(document.getElementById('workout-week-select').value, 10);
 			if(dayIdx === "" || exIdx === "" || !db.plan.days[dayIdx] || !db.plan.days[dayIdx].exercises[exIdx]) return;
 
+			clearAllStopwatches();
 			const ex = db.plan.days[dayIdx].exercises[exIdx];
+
+			// Modalità CIRCUITO: flusso dedicato (N esercizi in fila senza pausa, poi 1 recupero,
+			// ripetuto per R giri). Ha UI e logica proprie → esce subito dal ramo esercizio/super serie.
+			if (ex.type === 'circuit') {
+				renderCircuitSession(ex);
+				return;
+			}
+
+			currentCircuit = null;
 			const target = getCalculatedTarget(ex, week);
 			currentTargetSets = target.sets; // per indicatore "(last)" e highlight ultima serie
 
@@ -607,6 +862,9 @@
 			if (!targetBox) return;
 
 			const isSuperSet = partnerEx && partnerTarget;
+			currentSessionMode = isSuperSet ? 'superset' : 'single';
+			currentExerciseRef = ex;
+			currentPartnerRef = isSuperSet ? partnerEx : null;
 
 			if (isSuperSet) {
 				targetBox.innerHTML = `
@@ -617,18 +875,18 @@
 						</div>
 						<div>
 							<div class="flex justify-between items-center text-[10px] text-gray-400">
-								<span>Esercizio A: <strong>${esc(ex.name)}</strong></span>
+								<span>Esercizio A: <strong>${esc(ex.name)}</strong>${isTimed(ex) ? ' <span class="text-emerald-400 font-bold">⏱️ a tempo</span>' : ''}</span>
 								<span class="bg-indigo-900/60 text-indigo-300 px-1.5 py-0.5 rounded font-semibold uppercase text-[8px]">${target.label}</span>
 							</div>
-							<p class="text-base font-bold text-indigo-200">${target.sets} set x ${target.reps} rep @ ${target.weight} kg</p>
+							<p class="text-base font-bold text-indigo-200">${targetLine(ex, target.sets, target.reps, target.weight)}</p>
 							${ex.note ? `<p class="text-[11px] text-amber-400 italic mt-0.5">📝 Nota: ${esc(ex.note)}</p>` : ''}
 						</div>
 						<div class="border-t border-indigo-900/40 pt-2">
 							<div class="flex justify-between items-center text-[10px] text-gray-400">
-								<span>Esercizio B: <strong>${esc(partnerEx.name)}</strong></span>
+								<span>Esercizio B: <strong>${esc(partnerEx.name)}</strong>${isTimed(partnerEx) ? ' <span class="text-emerald-400 font-bold">⏱️ a tempo</span>' : ''}</span>
 								<span class="bg-indigo-900/60 text-indigo-300 px-1.5 py-0.5 rounded font-semibold uppercase text-[8px]">${partnerTarget.label}</span>
 							</div>
-							<p class="text-base font-bold text-indigo-200">${partnerTarget.sets} set x ${partnerTarget.reps} rep @ ${partnerTarget.weight} kg</p>
+							<p class="text-base font-bold text-indigo-200">${targetLine(partnerEx, partnerTarget.sets, partnerTarget.reps, partnerTarget.weight)}</p>
 							${partnerEx.note ? `<p class="text-[11px] text-amber-400 italic mt-0.5">📝 Nota: ${esc(partnerEx.note)}</p>` : ''}
 						</div>
 					</div>
@@ -637,10 +895,10 @@
 				targetBox.innerHTML = `
 					<div>
 						<div class="flex justify-between items-center mb-1">
-							<span class="text-xs font-semibold text-indigo-400 uppercase tracking-wider">🎯 Target Programmato:</span>
+							<span class="text-xs font-semibold text-indigo-400 uppercase tracking-wider">🎯 Target Programmato:${isTimed(ex) ? ' <span class="text-emerald-400">⏱️ A TEMPO</span>' : ''}</span>
 							<span id="target-type-badge" class="text-[9px] bg-indigo-900 text-indigo-200 px-1.5 py-0.5 rounded font-bold uppercase">${target.label}</span>
 						</div>
-						<p id="target-text" class="text-lg font-bold text-indigo-200">${target.sets} serie x ${target.reps} rep @ ${target.weight} kg</p>
+						<p id="target-text" class="text-lg font-bold text-indigo-200">${target.sets} serie x ${target.reps} ${measureUnit(ex)} @ ${target.weight} kg</p>
 						<p id="target-note" class="text-xs text-amber-400 mt-1.5 italic ${ex.note ? '' : 'hidden'}">${ex.note ? '📝 Nota: ' + esc(ex.note) : ''}</p>
 					</div>
 				`;
@@ -654,60 +912,28 @@
 					<h3 class="font-semibold mb-3 text-gray-200" id="set-counter-title">Registra Super Serie - Giro 1</h3>
 					<div class="space-y-4">
 						<div class="p-3 bg-gray-900/40 rounded-lg border border-indigo-950">
-							<p class="text-xs font-bold text-indigo-400 mb-2">A: ${esc(ex.name)}</p>
-							<div class="grid grid-cols-2 gap-3">
-								<div>
-									<label for="input-reps" class="block text-[10px] text-gray-400 mb-1">Ripetizioni</label>
-									<input type="number" id="input-reps" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-xs">
-								</div>
-								<div>
-									<label for="input-weight" class="block text-[10px] text-gray-400 mb-1">Carico (kg)</label>
-									<input type="number" id="input-weight" step="0.5" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-xs">
-								</div>
-							</div>
+							<p class="text-xs font-bold text-indigo-400 mb-2">A: ${esc(ex.name)}${isTimed(ex) ? ' ⏱️' : ''}</p>
+							${measureInputsHtml(ex, 'input-reps', 'input-weight', target.reps, target.weight)}
 						</div>
-						
 						<div class="p-3 bg-gray-900/40 rounded-lg border border-purple-950">
-							<p class="text-xs font-bold text-purple-400 mb-2">B: ${esc(partnerEx.name)}</p>
-							<div class="grid grid-cols-2 gap-3">
-								<div>
-									<label for="input-reps-partner" class="block text-[10px] text-gray-400 mb-1">Ripetizioni</label>
-									<input type="number" id="input-reps-partner" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-xs">
-								</div>
-								<div>
-									<label for="input-weight-partner" class="block text-[10px] text-gray-400 mb-1">Carico (kg)</label>
-									<input type="number" id="input-weight-partner" step="0.5" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-xs">
-								</div>
-							</div>
+							<p class="text-xs font-bold text-purple-400 mb-2">B: ${esc(partnerEx.name)}${isTimed(partnerEx) ? ' ⏱️' : ''}</p>
+							${measureInputsHtml(partnerEx, 'input-reps-partner', 'input-weight-partner', partnerTarget.reps, partnerTarget.weight)}
 						</div>
 					</div>
 					<button onclick="addSetToCurrentWorkout()" id="btn-save-temp-set" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-lg transition-colors mt-3 text-sm">
 						💾 Salva Giro Super Serie
 					</button>
 				`;
-				document.getElementById('input-weight').value = target.weight;
-				document.getElementById('input-reps').value = target.reps;
-				document.getElementById('input-weight-partner').value = partnerTarget.weight;
-				document.getElementById('input-reps-partner').value = partnerTarget.reps;
 			} else {
 				inputsContainer.innerHTML = `
 					<h3 class="font-semibold mb-3 text-gray-200" id="set-counter-title">Registra Serie 1</h3>
-					<div class="grid grid-cols-2 gap-3 mb-3">
-						<div>
-							<label for="input-reps" class="block text-xs text-gray-400 mb-1">Ripetizioni Fatte</label>
-							<input type="number" id="input-reps" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white">
-						</div>
-						<div>
-							<label for="input-weight" class="block text-xs text-gray-400 mb-1">Carico Effettivo (kg)</label>
-							<input type="number" id="input-weight" step="0.5" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white">
-						</div>
+					<div class="mb-3">
+						${measureInputsHtml(ex, 'input-reps', 'input-weight', target.reps, target.weight)}
 					</div>
 					<button onclick="addSetToCurrentWorkout()" id="btn-save-temp-set" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-lg transition-colors text-sm">
 						💾 Salva Serie
 					</button>
 				`;
-				document.getElementById('input-weight').value = target.weight;
-				document.getElementById('input-reps').value = target.reps;
 			}
 
 			const completeBtn = document.getElementById('btn-complete-workout');
@@ -721,11 +947,73 @@
 			updateSetCounter();
 		}
 
+		// Costruisce l'intera UI di una sessione CIRCUITO. Ogni "serie" registrata è un GIRO
+		// completo: contiene i valori (reps/peso) di TUTTI gli item del circuito. Il recupero
+		// parte al salvataggio del giro (dopo aver eseguito tutti gli item, senza pausa tra loro).
+		function renderCircuitSession(circuit) {
+			clearAllStopwatches();
+			currentSessionMode = 'circuit';
+			currentCircuit = circuit;
+			currentExerciseRef = circuit;
+			currentPartnerRef = null;
+			const items = Array.isArray(circuit.items) ? circuit.items : [];
+			currentTargetSets = circuit.rounds || 0; // il "target" del circuito è il numero di giri
+
+			defaultRestSeconds = circuit.restSeconds !== undefined ? circuit.restSeconds : 60;
+			initTimer(defaultRestSeconds);
+
+			const targetBox = document.getElementById('target-box');
+			if (targetBox) {
+				targetBox.classList.remove('hidden');
+				targetBox.innerHTML = `
+					<div class="space-y-2">
+						<div class="flex justify-between items-center border-b border-indigo-800 pb-1.5">
+							<span class="text-xs font-bold text-amber-400 uppercase tracking-wider">🔄 CIRCUITO — ${circuit.rounds || 0} giri</span>
+							<span class="text-[9px] bg-amber-900 text-amber-200 px-1.5 py-0.5 rounded font-bold uppercase">CIRCUITO</span>
+						</div>
+						<ol class="list-decimal list-inside space-y-0.5 text-sm text-indigo-200">
+							${items.map(it => `<li><strong>${esc(it.name)}</strong> — ${it.reps} ${measureUnit(it)}${(it.weight > 0) ? ` @ ${it.weight} kg` : ''}${isTimed(it) ? ' ⏱️' : ''}</li>`).join('')}
+						</ol>
+						<p class="text-[11px] text-gray-400 italic">Esegui tutti gli esercizi in fila senza pausa; il recupero (${defaultRestSeconds}s) parte a fine giro.</p>
+						${circuit.note ? `<p class="text-[11px] text-amber-400 italic">📝 Nota: ${esc(circuit.note)}</p>` : ''}
+					</div>
+				`;
+			}
+
+			const inputsContainer = document.getElementById('inputs-container');
+			if (inputsContainer) {
+				// Un blocco input per ciascun item del circuito: quantità (reps o cronometro-secondi) + peso.
+				const itemInputs = items.map((it, i) => `
+					<div class="p-3 bg-gray-900/40 rounded-lg border border-amber-950">
+						<p class="text-xs font-bold text-amber-400 mb-2">${i + 1}. ${esc(it.name)}${isTimed(it) ? ' ⏱️' : ''}</p>
+						${measureInputsHtml(it, `input-circuit-reps-${i}`, `input-circuit-weight-${i}`, it.reps, it.weight)}
+					</div>
+				`).join('');
+				inputsContainer.innerHTML = `
+					<h3 class="font-semibold mb-3 text-gray-200" id="set-counter-title">Registra Giro 1</h3>
+					<div class="space-y-4">${itemInputs}</div>
+					<button onclick="addSetToCurrentWorkout()" id="btn-save-temp-set" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-medium py-2.5 rounded-lg transition-colors mt-3 text-sm">
+						💾 Salva Giro
+					</button>
+				`;
+			}
+
+			const completeBtn = document.getElementById('btn-complete-workout');
+			if (completeBtn) completeBtn.innerText = "✅ Circuito Completato";
+
+			currentSessionSets = [];
+			editingSetIndex = null;
+			renderCurrentSets();
+			updateSetCounter();
+		}
+
         // Prepara il timer al valore di riposo dell'esercizio corrente, FERMANDO qualsiasi
         // countdown in corso (fix #4: evita che un timer avviato prosegua sotto il nuovo esercizio).
         function initTimer(seconds) {
             clearInterval(timerInterval);
             timerInterval = null;
+            timerEndTime = null;
+            alertFired = false;
             defaultRestSeconds = seconds || 90;
             timerTimeLeft = defaultRestSeconds;
             document.getElementById('timer-container').classList.remove('hidden');
@@ -759,22 +1047,47 @@
         // Avvia il countdown (no-op se è già in corso). Usato sia dai pulsanti sia dall'auto-avvio.
         function startTimerCountdown() {
             if (timerInterval) return;
+            // Richiesta permesso Notifiche agganciata al gesto utente (tap Avvia / salvataggio serie):
+            // serve per l'avviso di sistema a schermo spento (vedi showRestDoneNotification()).
+            ensureNotificationPermission();
+            // (Ri)calcola l'ISTANTE assoluto di fine dal tempo rimanente corrente: copre sia
+            // l'avvio da fermo sia la ripresa dopo una pausa. Il tick ne deriva il rimanente,
+            // quindi il conteggio resta corretto anche se il browser congela il timer JS.
+            timerEndTime = Date.now() + timerTimeLeft * 1000;
+            alertFired = false;
             setTimerButtonState('running');
-            timerInterval = setInterval(() => {
-                timerTimeLeft--;
-                updateTimerDisplay();
-                if (timerTimeLeft <= 0) {
-                    clearInterval(timerInterval);
-                    timerInterval = null;
+            // Tick più fitto (250ms) per un display fluido e un recupero rapido dopo un freeze.
+            timerInterval = setInterval(tickTimer, 250);
+            tickTimer(); // aggiorna subito, senza attendere il primo intervallo
+        }
+
+        // Un "tick" del countdown: ricava il rimanente dall'istante assoluto di fine (robusto al
+        // throttling/congelamento dei timer in background) e, a tempo scaduto, emette l'alert UNA volta.
+        function tickTimer() {
+            if (timerEndTime === null) return;
+            const remainingMs = timerEndTime - Date.now();
+            timerTimeLeft = Math.max(0, Math.ceil(remainingMs / 1000));
+            updateTimerDisplay();
+            if (remainingMs <= 0) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+                if (!alertFired) {
+                    alertFired = true;
                     triggerAlert();
-                    resetTimer();
                 }
-            }, 1000);
+                resetTimer();
+            }
         }
 
         function pauseTimerCountdown() {
             clearInterval(timerInterval);
             timerInterval = null;
+            // Congela il rimanente all'istante della pausa (dall'orologio, non dall'ultimo tick).
+            if (timerEndTime !== null) {
+                timerTimeLeft = Math.max(0, Math.ceil((timerEndTime - Date.now()) / 1000));
+            }
+            timerEndTime = null;
+            updateTimerDisplay();
             setTimerButtonState('paused');
         }
 
@@ -790,6 +1103,8 @@
         function resetTimer() {
             clearInterval(timerInterval);
             timerInterval = null;
+            timerEndTime = null;
+            alertFired = false;
             timerTimeLeft = defaultRestSeconds;
             updateTimerDisplay();
             setTimerButtonState('idle');
@@ -799,12 +1114,69 @@
         function autoStartRestTimer() {
             clearInterval(timerInterval);
             timerInterval = null;
+            timerEndTime = null;
+            alertFired = false;
             timerTimeLeft = defaultRestSeconds;
             updateTimerDisplay();
             startTimerCountdown();
         }
 
+        // Se torno sulla scheda / riaccendo lo schermo mentre il recupero è attivo, ricalcolo
+        // subito il rimanente: se nel frattempo è scaduto, l'alert scatta all'istante.
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && timerEndTime !== null) {
+                tickTimer();
+            }
+        });
+
+        // Chiede (una sola volta) il permesso per le notifiche di sistema. DEVE partire da un
+        // gesto utente. Silenziosa: se l'utente rifiuta o l'API manca, l'app resta pienamente
+        // funzionante con vibrazione+beep in primo piano.
+        function ensureNotificationPermission() {
+            if (!('Notification' in window)) return;
+            if (Notification.permission === 'default') {
+                try { Notification.requestPermission(); } catch (e) { /* browser vecchio: ignora */ }
+            }
+        }
+
+        // Notifica di SISTEMA a fine recupero. È l'unico avviso che Android fa vibrare/suonare
+        // anche a schermo spento o con l'app in background: la Vibration API della pagina, lì,
+        // viene ignorata dal browser (gate di visibilità). La mostra il Service Worker (necessario
+        // per notifiche persistenti su mobile), con fallback alla Notification diretta.
+        function showRestDoneNotification() {
+            if (!('Notification' in window) || Notification.permission !== 'granted') return;
+            const title = '⏱️ Recupero terminato';
+            const options = {
+                body: 'Tempo di riposo scaduto — pronto per la prossima serie!',
+                icon: './icon.png',
+                badge: './icon.png',
+                tag: 'gym-rest-timer',   // sostituisce l'eventuale notifica precedente
+                renotify: true,          // rivibra/risuona anche se il tag è uguale
+                vibrate: [600, 200, 600, 200, 600] // onorata dai device che ancora la supportano
+            };
+            try {
+                if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+                    navigator.serviceWorker.ready
+                        .then(reg => reg.showNotification(title, options))
+                        .catch(() => { try { new Notification(title, options); } catch (e) {} });
+                } else {
+                    new Notification(title, options);
+                }
+            } catch (e) { /* niente notifica: restano vibrazione+beep in primo piano */ }
+        }
+
         function triggerAlert() {
+            // Avviso di sistema: unico canale che vibra/suona anche in background su Android.
+            showRestDoneNotification();
+            // Vibrazione + beep in primo piano (routine condivisa col cronometro degli esercizi a tempo).
+            buzzAndBeep();
+        }
+
+        // Routine di VIBRAZIONE + SUONO (senza notifica di sistema). Estratta da triggerAlert() per
+        // essere riusata dal cronometro degli esercizi a tempo al raggiungimento del target (fix #2).
+        // Efficace solo con pagina VISIBILE (a schermo spento il browser ignora la Vibration API);
+        // per il cronometro va bene perché lo si guarda mentre si esegue l'esercizio.
+        function buzzAndBeep() {
             // Vibrazione: l'API non regola l'INTENSITÀ (fissata dall'hardware); si può solo rendere
             // il pattern più lungo e insistente → percepito più forte. Buzz lunghi ripetuti.
             if (navigator.vibrate) {
@@ -840,51 +1212,76 @@
 		function updateSetCounter() {
 			const title = document.getElementById('set-counter-title');
 			if (!title) return;
-			const isSuperSet = !!document.getElementById('input-weight-partner');
 			// Numero della serie/giro che si sta per registrare (1-based).
 			const nextNum = (editingSetIndex !== null ? editingSetIndex : currentSessionSets.length) + 1;
-			// Suffisso "(ultima)" quando la prossima da registrare è l'ultima serie prevista dal target.
+			// Suffisso "(ultima)" quando la prossima da registrare è l'ultima serie/giro previsto dal target.
 			const lastTag = (currentTargetSets > 0 && nextNum === currentTargetSets)
 				? ` <span class="text-[10px] font-bold text-red-400 uppercase align-middle">(ultima)</span>` : '';
-			if (isSuperSet) {
+			if (currentSessionMode === 'circuit') {
+				title.innerHTML = editingSetIndex !== null ? `Modifica Giro ${nextNum}${lastTag}` : `Registra Giro ${nextNum}${lastTag}`;
+			} else if (currentSessionMode === 'superset') {
 				title.innerHTML = editingSetIndex !== null ? `Modifica Giro Super Serie ${nextNum}${lastTag}` : `Registra Super Serie - Giro ${nextNum}${lastTag}`;
 			} else {
 				title.innerHTML = editingSetIndex !== null ? `Modifica Serie ${nextNum}${lastTag}` : `Registra Serie ${nextNum}${lastTag}`;
 			}
 		}
 
+		// Etichetta del pulsante "salva" secondo la modalità corrente (usata per ripristinarla dopo un edit).
+		function saveButtonLabel() {
+			if (currentSessionMode === 'circuit') return "💾 Salva Giro";
+			if (currentSessionMode === 'superset') return "💾 Salva Giro Super Serie";
+			return "💾 Salva Serie";
+		}
+
 		function addSetToCurrentWorkout() {
 			const dayIdx = document.getElementById('workout-day-select').value;
 			const exIdx = document.getElementById('active-exercise-select').value;
 			if(dayIdx === "" || exIdx === "" || !db.plan.days[dayIdx] || !db.plan.days[dayIdx].exercises[exIdx]) return;
-			
-			const isSuperSet = !!document.getElementById('input-weight-partner');
+
             let dataPack = {};
 
-			if (isSuperSet) {
-				const wA = document.getElementById('input-weight').value;
-				const rA = document.getElementById('input-reps').value;
-				const wB = document.getElementById('input-weight-partner').value;
-				const rB = document.getElementById('input-reps-partner').value;
+			// Ferma eventuali cronometri attivi prima di leggere i valori (fissa i secondi negli input).
+			Object.keys(exerciseStopwatches).forEach(id => stopStopwatch(id));
 
-				if (!wA || !rA || !wB || !rB) return alert('Inserisci dati validi.');
+			if (currentSessionMode === 'circuit') {
+				const items = (currentCircuit && Array.isArray(currentCircuit.items)) ? currentCircuit.items : [];
+				const results = [];
+				for (let i = 0; i < items.length; i++) {
+					const rEl = document.getElementById(`input-circuit-reps-${i}`);
+					const wEl = document.getElementById(`input-circuit-weight-${i}`);
+					// Quantità (reps o secondi) obbligatoria; il peso è opzionale (vuoto = 0, corpo libero).
+					if (!rEl || rEl.value === "") return alert(`Inserisci ${measureUnit(items[i]) === 'sec' ? 'i secondi' : 'le ripetizioni'} per ogni esercizio.`);
+					const w = (wEl && wEl.value !== "") ? parseFloat(wEl.value) : 0;
+					results.push({ name: items[i].name, reps: parseInt(rEl.value, 10), weight: w });
+				}
+				if (results.length === 0) return alert('Il circuito non ha esercizi.');
+				dataPack = { items: results };
+			} else if (currentSessionMode === 'superset') {
+				const rA = document.getElementById('input-reps').value;
+				const rB = document.getElementById('input-reps-partner').value;
+				const wARaw = document.getElementById('input-weight').value;
+				const wBRaw = document.getElementById('input-weight-partner').value;
+				// Quantità obbligatoria per entrambi; peso opzionale (vuoto = 0).
+				if (rA === "" || rB === "") return alert('Inserisci la quantità (reps/secondi) per entrambi gli esercizi.');
 				dataPack = {
-					exA: { weight: parseFloat(wA), reps: parseInt(rA, 10) },
-					exB: { weight: parseFloat(wB), reps: parseInt(rB, 10) }
+					exA: { weight: wARaw === "" ? 0 : parseFloat(wARaw), reps: parseInt(rA, 10) },
+					exB: { weight: wBRaw === "" ? 0 : parseFloat(wBRaw), reps: parseInt(rB, 10) }
 				};
 			} else {
-				const weight = document.getElementById('input-weight').value;
 				const reps = document.getElementById('input-reps').value;
-				if(!weight || !reps) return alert('Inserisci dati validi');
-				dataPack = { weight: parseFloat(weight), reps: parseInt(reps, 10) };
+				const weightRaw = document.getElementById('input-weight').value;
+				// Quantità (reps o secondi) obbligatoria; peso opzionale (vuoto = 0, corpo libero/plank).
+				if (reps === "") return alert('Inserisci la quantità (ripetizioni o secondi).');
+				dataPack = { weight: weightRaw === "" ? 0 : parseFloat(weightRaw), reps: parseInt(reps, 10) };
 			}
 
             if (editingSetIndex !== null) {
                 currentSessionSets[editingSetIndex] = dataPack;
                 editingSetIndex = null;
-                document.getElementById('btn-save-temp-set').innerText = isSuperSet ? "💾 Salva Giro Super Serie" : "💾 Salva Serie";
+                document.getElementById('btn-save-temp-set').innerText = saveButtonLabel();
             } else {
                 currentSessionSets.push(dataPack);
+                resetTimedInputsForNextSet(); // azzera i cronometri per la serie/giro successivo
                 autoStartRestTimer();
             }
 
@@ -892,20 +1289,53 @@
 			updateSetCounter();
 		}
 
+		// Dopo aver salvato una serie/giro, riporta a 0 i campi degli esercizi a TEMPO (e i relativi
+		// cronometri/display), così la serie successiva riparte da zero invece che dall'ultimo valore.
+		// I campi a reps NON vengono toccati (comodo ripartire dallo stesso target di ripetizioni).
+		function resetTimedInputsForNextSet() {
+			if (currentSessionMode === 'circuit') {
+				const items = (currentCircuit && Array.isArray(currentCircuit.items)) ? currentCircuit.items : [];
+				items.forEach((it, i) => { if (isTimed(it)) resetStopwatch(`input-circuit-reps-${i}`); });
+			} else if (currentSessionMode === 'superset') {
+				if (isTimed(currentExerciseRef)) resetStopwatch('input-reps');
+				if (isTimed(currentPartnerRef)) resetStopwatch('input-reps-partner');
+			} else {
+				if (isTimed(currentExerciseRef)) resetStopwatch('input-reps');
+			}
+		}
+
+        // Imposta il valore "quantità" di un input in fase di edit, aggiornando ANCHE il display del
+        // cronometro se l'esercizio è a tempo (l'input dei secondi è nascosto, il numero visibile è il display).
+        function setQtyInput(repsId, value, timed) {
+            const el = document.getElementById(repsId);
+            if (el) el.value = value;
+            if (timed) {
+                const disp = document.getElementById(`stopwatch-disp-${repsId}`);
+                if (disp) disp.innerText = fmtSecs(value);
+            }
+        }
+
         function editTemporarySet(index) {
             editingSetIndex = index;
             const targetSet = currentSessionSets[index];
-            const isSuperSet = !!document.getElementById('input-weight-partner');
-            
-            if (isSuperSet) {
+
+            if (currentSessionMode === 'circuit') {
+                const items = (currentCircuit && Array.isArray(currentCircuit.items)) ? currentCircuit.items : [];
+                (targetSet.items || []).forEach((it, i) => {
+                    const wEl = document.getElementById(`input-circuit-weight-${i}`);
+                    setQtyInput(`input-circuit-reps-${i}`, it.reps, isTimed(items[i]));
+                    if (wEl) wEl.value = it.weight;
+                });
+                document.getElementById('btn-save-temp-set').innerText = "✏️ Aggiorna Giro";
+            } else if (currentSessionMode === 'superset') {
                 document.getElementById('input-weight').value = targetSet.exA.weight;
-                document.getElementById('input-reps').value = targetSet.exA.reps;
+                setQtyInput('input-reps', targetSet.exA.reps, isTimed(currentExerciseRef));
                 document.getElementById('input-weight-partner').value = targetSet.exB.weight;
-                document.getElementById('input-reps-partner').value = targetSet.exB.reps;
+                setQtyInput('input-reps-partner', targetSet.exB.reps, isTimed(currentPartnerRef));
                 document.getElementById('btn-save-temp-set').innerText = "✏️ Aggiorna Giro";
             } else {
                 document.getElementById('input-weight').value = targetSet.weight;
-                document.getElementById('input-reps').value = targetSet.reps;
+                setQtyInput('input-reps', targetSet.reps, isTimed(currentExerciseRef));
                 document.getElementById('btn-save-temp-set').innerText = "✏️ Aggiorna Serie";
             }
             updateSetCounter();
@@ -916,8 +1346,7 @@
                 currentSessionSets.splice(index, 1);
                 if (editingSetIndex === index) {
                     editingSetIndex = null;
-                    const isSuperSet = !!document.getElementById('input-weight-partner');
-                    document.getElementById('btn-save-temp-set').innerText = isSuperSet ? "💾 Salva Giro Super Serie" : "💾 Salva Serie";
+                    document.getElementById('btn-save-temp-set').innerText = saveButtonLabel();
                 } else if (editingSetIndex > index) {
                     editingSetIndex--;
                 }
@@ -929,19 +1358,42 @@
 		function renderCurrentSets() {
 			const container = document.getElementById('current-sets-list');
 			if (!container) return;
-			
-			const isSuperSet = !!document.getElementById('input-weight-partner');
-			// La serie all'indice (target-1) è l'ultima prevista → evidenziata in rosso chiaro.
+
+			// La serie/giro all'indice (target-1) è l'ultima prevista → evidenziata in rosso chiaro.
 			const isLast = (i) => currentTargetSets > 0 && i === currentTargetSets - 1;
 
+			// Item circuito: la misura (rep/sec) la conosce l'item corrispondente nel piano.
+			const circuitItems = (currentCircuit && Array.isArray(currentCircuit.items)) ? currentCircuit.items : [];
+
+			if (currentSessionMode === 'circuit') {
+				container.innerHTML = currentSessionSets.map((set, i) => `
+					<div class="${isLast(i) ? 'bg-red-500/25 border-red-400/70' : 'bg-gray-700/80 border-amber-950'} border p-2.5 rounded text-xs space-y-1 flex justify-between items-center">
+						<div class="flex-1">
+							<div class="font-bold text-gray-300">Giro ${i + 1}${isLast(i) ? ' <span class="text-[9px] font-bold text-red-300 uppercase">(ultima)</span>' : ''}</div>
+							<div class="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+								${(set.items || []).map((it, k) => `<span class="text-amber-300">${esc(it.name)}: ${it.reps} ${measureUnit(circuitItems[k])}${(it.weight > 0) ? ` x ${it.weight} kg` : ''}</span>`).join('')}
+							</div>
+						</div>
+						<div class="flex gap-2">
+							<button onclick="editTemporarySet(${i})" class="text-blue-400 p-1 text-sm">✏️</button>
+							<button onclick="deleteTemporarySet(${i})" class="text-red-400 p-1 text-sm">🗑️</button>
+						</div>
+					</div>
+				`).join('');
+				return;
+			}
+
+			const isSuperSet = currentSessionMode === 'superset';
+
 			if (isSuperSet) {
+				const uA = measureUnit(currentExerciseRef), uB = measureUnit(currentPartnerRef);
 				container.innerHTML = currentSessionSets.map((set, i) => `
 					<div class="${isLast(i) ? 'bg-red-500/25 border-red-400/70' : 'bg-gray-700/80 border-indigo-950'} border p-2.5 rounded text-xs space-y-1 flex justify-between items-center">
 						<div class="flex-1">
 							<div class="font-bold text-gray-300">Giro ${i + 1}${isLast(i) ? ' <span class="text-[9px] font-bold text-red-300 uppercase">(ultima)</span>' : ''}</div>
 							<div class="flex gap-4">
-								<span class="text-indigo-300">A: ${set.exA.reps} x ${set.exA.weight} kg</span>
-								<span class="text-purple-300">B: ${set.exB.reps} x ${set.exB.weight} kg</span>
+								<span class="text-indigo-300">A: ${set.exA.reps} ${uA}${(set.exA.weight > 0) ? ` x ${set.exA.weight} kg` : ''}</span>
+								<span class="text-purple-300">B: ${set.exB.reps} ${uB}${(set.exB.weight > 0) ? ` x ${set.exB.weight} kg` : ''}</span>
 							</div>
 						</div>
                         <div class="flex gap-2">
@@ -951,9 +1403,10 @@
 					</div>
 				`).join('');
 			} else {
+				const u = measureUnit(currentExerciseRef);
 				container.innerHTML = currentSessionSets.map((set, i) => `
 					<div class="flex justify-between items-center ${isLast(i) ? 'bg-red-500/25 border border-red-400/70' : 'bg-gray-700'} p-2 rounded text-sm">
-						<span>Serie ${i + 1}${isLast(i) ? ' <span class="text-[10px] font-bold text-red-300 uppercase">(ultima)</span>' : ''}: <strong class="text-indigo-400">${set.reps} rep x ${set.weight} kg</strong></span>
+						<span>Serie ${i + 1}${isLast(i) ? ' <span class="text-[10px] font-bold text-red-300 uppercase">(ultima)</span>' : ''}: <strong class="text-indigo-400">${set.reps} ${u}${(set.weight > 0) ? ` x ${set.weight} kg` : ''}</strong></span>
                         <div class="flex gap-2">
                             <button onclick="editTemporarySet(${i})" class="text-blue-400 p-1">✏️</button>
                             <button onclick="deleteTemporarySet(${i})" class="text-red-400 p-1">🗑️</button>
@@ -980,6 +1433,7 @@
 			if (exSel.selectedIndex < exSel.options.length - 1) {
 				exSel.selectedIndex += 1;
 				startExerciseSession();
+				persistWorkoutCursor(); // salva l'avanzamento di esercizio nel cursore (fix #1)
 				return 'exercise';
 			}
 
@@ -1018,33 +1472,48 @@
 			if(currentSessionSets.length === 0) return alert("Inserisci almeno una serie.");
 
 			const ex = db.plan.days[dayIdx].exercises[exIdx];
-			const isSuperSet = !!document.getElementById('input-weight-partner');
+			const today = new Date().toLocaleDateString('it-IT');
 
-			if (isSuperSet) {
+			if (currentSessionMode === 'circuit') {
+				// Ogni item del circuito diventa una voce di storico separata (linea di volume propria).
+				// Per l'item i-esimo, i suoi set sono i valori di quell'item in TUTTI i giri registrati.
+				// `measure` si porta dietro l'unità (time/reps) così il grafico calcola la metrica giusta.
+				const items = (currentCircuit && Array.isArray(currentCircuit.items)) ? currentCircuit.items : [];
+				items.forEach((it, i) => {
+					const setsForItem = currentSessionSets
+						.map(round => (round.items && round.items[i]) ? { weight: round.items[i].weight, reps: round.items[i].reps } : null)
+						.filter(Boolean);
+					if (setsForItem.length === 0) return;
+					db.history.push({ date: today, week: week, exercise: it.name, sets: setsForItem, measure: exMeasure(it) });
+				});
+			} else if (currentSessionMode === 'superset') {
 				const partnerId = ex.superSetWith;
 				const partnerEx = db.plan.days[dayIdx].exercises.find(e => e.id === partnerId);
 
 				if (!partnerEx) return alert("Errore partner non trovato.");
 
 				db.history.push({
-					date: new Date().toLocaleDateString('it-IT'),
+					date: today,
 					week: week,
 					exercise: ex.name,
-					sets: currentSessionSets.map(s => s.exA)
+					sets: currentSessionSets.map(s => s.exA),
+					measure: exMeasure(ex)
 				});
 
 				db.history.push({
-					date: new Date().toLocaleDateString('it-IT'),
+					date: today,
 					week: week,
 					exercise: partnerEx.name,
-					sets: currentSessionSets.map(s => s.exB)
+					sets: currentSessionSets.map(s => s.exB),
+					measure: exMeasure(partnerEx)
 				});
 			} else {
 				db.history.push({
-					date: new Date().toLocaleDateString('it-IT'),
+					date: today,
 					week: week,
 					exercise: ex.name,
-					sets: currentSessionSets
+					sets: currentSessionSets,
+					measure: exMeasure(ex)
 				});
 			}
 
@@ -1112,8 +1581,9 @@
 				db.plan = JSON.parse(JSON.stringify(targetArc.plan));
 				db.planType = targetArc.planType;
 				db.customWeeks = targetArc.customWeeks;
-				db.history = []; 
-				db.last_day_index = -1; 
+				db.history = [];
+				db.last_day_index = -1;
+				db.cursor = null; // nuovo ciclo → riparte da Settimana 1 · Giorno 1 · Esercizio 1
 				saveData();
 				alert(`Programma "${targetArc.name}" caricato!`);
 				switchTab('workout');
@@ -1133,6 +1603,7 @@
 				db.plan = { days: [] };
 				db.history = [];
 				db.last_day_index = -1;
+				db.cursor = null;
 				saveData();
 				switchTab('plan');
 			}
@@ -1196,6 +1667,7 @@
 			let html = '<option value="">-- Nessuna Super Serie --</option>';
 			db.plan.days[dayIdx].exercises.forEach((ex, idx) => {
 				if (currentEditState.dayIdx === dayIdx && currentEditState.exIdx === idx) return;
+				if (ex.type === 'circuit') return; // un circuito non può essere partner di super serie
 				html += `<option value="${esc(ex.id)}">${esc(ex.name)}</option>`;
 			});
 			select.innerHTML = html;
@@ -1294,6 +1766,121 @@
 		  }
 		}
 
+		// --- Form Pianificazione: commuta tra "Esercizio Singolo" e "Circuito" ---
+		// Mostra/nasconde i due gruppi di campi e adatta l'etichetta del nome.
+		function toggleExerciseFormType() {
+			const type = document.getElementById('plan-entry-type').value;
+			const singleFields = document.getElementById('single-exercise-fields');
+			const circuitFields = document.getElementById('circuit-fields');
+			const nameLabel = document.getElementById('plan-name-label');
+			const nameInput = document.getElementById('plan-exercise-name');
+			if (type === 'circuit') {
+				singleFields?.classList.add('hidden');
+				circuitFields?.classList.remove('hidden');
+				if (nameLabel) nameLabel.innerText = "Nome Circuito";
+				if (nameInput) nameInput.placeholder = "es. Circuito Addome";
+				if (circuitDraftItems.length === 0) addCircuitDraftItem(); // parti con almeno una riga
+				renderCircuitDraftItems();
+			} else {
+				circuitFields?.classList.add('hidden');
+				singleFields?.classList.remove('hidden');
+				if (nameLabel) nameLabel.innerText = "Nome Esercizio";
+				if (nameInput) nameInput.placeholder = "es. Panca Piana";
+			}
+		}
+
+		// Adatta le etichette del form singolo alla misura scelta (reps vs secondi).
+		function toggleMeasureLabels() {
+			const measure = document.getElementById('plan-measure')?.value || 'reps';
+			const isTime = measure === 'time';
+			const repsLabel = document.getElementById('plan-reps-label');
+			if (repsLabel) repsLabel.innerText = isTime ? 'Sec Base' : 'Rep Base';
+			const repsInput = document.getElementById('plan-reps');
+			if (repsInput) repsInput.title = isTime ? 'Durata target in secondi' : 'Ripetizioni base';
+		}
+
+		// Aggiunge una riga vuota alla bozza degli item del circuito e ri-renderizza.
+		// Prima salva i valori già digitati per non perderli al ridisegno.
+		function addCircuitDraftItem() {
+			syncCircuitDraftFromInputs();
+			circuitDraftItems.push({ name: "", reps: 10, weight: 0, measure: 'reps' });
+			renderCircuitDraftItems();
+		}
+
+		// Rimuove l'item i-esimo dalla bozza (mantenendone almeno uno) e ri-renderizza.
+		function removeCircuitDraftItem(i) {
+			circuitDraftItems.splice(i, 1);
+			if (circuitDraftItems.length === 0) circuitDraftItems.push({ name: "", reps: 10, weight: 0, measure: 'reps' });
+			renderCircuitDraftItems();
+		}
+
+		// Sposta l'item i-esimo su/giù nella bozza. Salva prima i valori digitati (sync) per non
+		// perderli, poi scambia con il vicino. delta = -1 (su) | +1 (giù). No-op ai bordi.
+		function moveCircuitDraftItem(i, delta) {
+			syncCircuitDraftFromInputs();
+			const j = i + delta;
+			if (j < 0 || j >= circuitDraftItems.length) return;
+			const tmp = circuitDraftItems[i];
+			circuitDraftItems[i] = circuitDraftItems[j];
+			circuitDraftItems[j] = tmp;
+			renderCircuitDraftItems();
+		}
+
+		// Prima di ridisegnare le righe, salva ciò che l'utente ha già digitato negli input
+		// (altrimenti aggiungere/rimuovere una riga perderebbe i valori non ancora "committati").
+		function syncCircuitDraftFromInputs() {
+			circuitDraftItems.forEach((it, i) => {
+				const nEl = document.getElementById(`circuit-item-name-${i}`);
+				const rEl = document.getElementById(`circuit-item-reps-${i}`);
+				const wEl = document.getElementById(`circuit-item-weight-${i}`);
+				const mEl = document.getElementById(`circuit-item-measure-${i}`);
+				if (nEl) it.name = nEl.value;
+				if (rEl) it.reps = rEl.value === "" ? 0 : parseInt(rEl.value, 10);
+				if (wEl) it.weight = wEl.value === "" ? 0 : parseFloat(wEl.value);
+				if (mEl) it.measure = mEl.value === 'time' ? 'time' : 'reps';
+			});
+		}
+
+		function renderCircuitDraftItems() {
+			const container = document.getElementById('circuit-items-rows');
+			if (!container) return;
+			const n = circuitDraftItems.length;
+			container.innerHTML = circuitDraftItems.map((it, i) => {
+				const t = isTimed(it);
+				return `
+				<div class="bg-gray-800/60 p-2 rounded-lg border border-gray-700 space-y-2">
+					<div class="flex items-center gap-2">
+						<div class="flex flex-col gap-0.5">
+							<button type="button" onclick="moveCircuitDraftItem(${i}, -1)" class="text-gray-400 hover:text-white bg-gray-800 border border-gray-700 rounded text-[9px] leading-tight px-1 ${i === 0 ? 'opacity-30 pointer-events-none' : ''}" title="Sposta su">▲</button>
+							<button type="button" onclick="moveCircuitDraftItem(${i}, 1)" class="text-gray-400 hover:text-white bg-gray-800 border border-gray-700 rounded text-[9px] leading-tight px-1 ${i === n - 1 ? 'opacity-30 pointer-events-none' : ''}" title="Sposta giù">▼</button>
+						</div>
+						<div class="flex-1">
+							<label for="circuit-item-name-${i}" class="block text-[10px] text-gray-400 mb-0.5">${i + 1}. Esercizio</label>
+							<input type="text" id="circuit-item-name-${i}" value="${esc(it.name)}" placeholder="es. Plank" class="w-full bg-gray-700 border border-gray-600 rounded p-1.5 text-white text-xs">
+						</div>
+						<button type="button" onclick="syncCircuitDraftFromInputs(); removeCircuitDraftItem(${i})" class="text-red-400 hover:text-red-300 text-sm self-end pb-1.5" title="Rimuovi">🗑️</button>
+					</div>
+					<div class="grid grid-cols-3 gap-2">
+						<div>
+							<label for="circuit-item-measure-${i}" class="block text-[10px] text-gray-400 mb-0.5">Misura</label>
+							<select id="circuit-item-measure-${i}" onchange="syncCircuitDraftFromInputs(); renderCircuitDraftItems()" class="w-full bg-gray-700 border border-gray-600 rounded p-1.5 text-white text-xs">
+								<option value="reps" ${t ? '' : 'selected'}>🔢 Rep</option>
+								<option value="time" ${t ? 'selected' : ''}>⏱️ Sec</option>
+							</select>
+						</div>
+						<div>
+							<label for="circuit-item-reps-${i}" class="block text-[10px] text-gray-400 mb-0.5">${t ? 'Secondi' : 'Rep'}</label>
+							<input type="number" id="circuit-item-reps-${i}" value="${it.reps}" class="w-full bg-gray-700 border border-gray-600 rounded p-1.5 text-center text-white text-xs">
+						</div>
+						<div>
+							<label for="circuit-item-weight-${i}" class="block text-[10px] text-gray-400 mb-0.5">kg</label>
+							<input type="number" id="circuit-item-weight-${i}" value="${it.weight}" step="0.5" class="w-full bg-gray-700 border border-gray-600 rounded p-1.5 text-center text-white text-xs">
+						</div>
+					</div>
+				</div>
+			`;}).join('');
+		}
+
 		function addNewDay() {
 			const input = document.getElementById('new-day-name');
 			if (!input) return;
@@ -1310,6 +1897,15 @@
 		function saveExerciseFromForm() {
 			const dayIdx = parseInt(document.getElementById('plan-day-select').value, 10);
 			const name = document.getElementById('plan-exercise-name').value.trim();
+			const entryType = document.getElementById('plan-entry-type').value;
+
+			// Ramo CIRCUITO: struttura dati e validazione dedicate; niente progressione/super serie.
+			if (entryType === 'circuit') {
+				saveCircuitFromForm(dayIdx, name);
+				return;
+			}
+
+			const measure = document.getElementById('plan-measure').value === 'time' ? 'time' : 'reps';
 			const sets = parseInt(document.getElementById('plan-sets').value, 10) || 4;
 			const reps = parseInt(document.getElementById('plan-reps').value, 10) || 10;
 			const weight = parseFloat(document.getElementById('plan-weight').value) || 0;
@@ -1343,7 +1939,9 @@
 			}
 
 			// Il link super serie viene applicato dopo l'inserimento; qui parte azzerato.
+			// `measure` scritto solo se 'time' (retrocompat: assente = reps → non altera dati esistenti).
 			const exerciseData = { id: exId, name, sets, reps, weight, restSeconds, progression, step, note, weeklyTargets, superSetWith: "" };
+			if (measure === 'time') exerciseData.measure = 'time';
 
 			if (isEdit) {
 				if (currentEditState.dayIdx !== dayIdx) {
@@ -1380,11 +1978,91 @@
 			renderPlanTab();
 		}
 
+		// Salvataggio di un blocco CIRCUITO dal form di Pianificazione (create o edit).
+		// Un circuito è un esercizio con type:'circuit', senza progressione né super serie.
+		function saveCircuitFromForm(dayIdx, name) {
+			if (isNaN(dayIdx) || !name) return alert("Compila il nome del circuito.");
+
+			syncCircuitDraftFromInputs();
+			// Scarta le righe senza nome; valida quantità/peso. `measure` scritto solo se 'time'.
+			const items = circuitDraftItems
+				.map(it => {
+					const o = { name: String(it.name || "").trim(), reps: parseInt(it.reps, 10) || 0, weight: parseFloat(it.weight) || 0 };
+					if (it.measure === 'time') o.measure = 'time';
+					return o;
+				})
+				.filter(it => it.name !== "");
+			if (items.length === 0) return alert("Aggiungi almeno un esercizio al circuito (con un nome).");
+			if (items.some(it => it.reps <= 0)) return alert("Ogni esercizio del circuito deve avere ripetizioni/secondi > 0.");
+
+			const rounds = parseInt(document.getElementById('plan-circuit-rounds').value, 10) || 1;
+			const restSeconds = parseInt(document.getElementById('plan-circuit-rest').value, 10) || 60;
+			const note = document.getElementById('plan-circuit-note').value.trim();
+
+			const isEdit = currentEditState.dayIdx !== null && currentEditState.exIdx !== null;
+			const existingEx = isEdit ? db.plan.days[currentEditState.dayIdx].exercises[currentEditState.exIdx] : null;
+			const exId = existingEx && existingEx.id ? existingEx.id : genExId();
+			const oldName = existingEx ? existingEx.name : "";
+
+			// Rinomina sicura del circuito: propaga il nuovo nome del blocco allo storico
+			// SOLO se coincide con quello vecchio (le voci di storico usano i NOMI degli item,
+			// non il nome del circuito; ma se un item si chiama come il circuito lo rispettiamo).
+			if (isEdit && oldName && oldName !== name) {
+				db.history.forEach(log => { if (log.exercise === oldName) log.exercise = name; });
+			}
+
+			const circuitData = { id: exId, type: 'circuit', name, rounds, restSeconds, note, items };
+
+			if (isEdit) {
+				if (currentEditState.dayIdx !== dayIdx) {
+					// Spostamento in altro giorno: rompi eventuali link super serie che puntavano qui.
+					const srcExs = db.plan.days[currentEditState.dayIdx].exercises;
+					srcExs.forEach(ex => { if (ex.superSetWith === exId) ex.superSetWith = ""; });
+					srcExs.splice(currentEditState.exIdx, 1);
+					db.plan.days[dayIdx].exercises.push(circuitData);
+				} else {
+					db.plan.days[dayIdx].exercises[currentEditState.exIdx] = circuitData;
+				}
+			} else {
+				db.plan.days[dayIdx].exercises.push(circuitData);
+			}
+
+			// Un circuito non può essere partner di super serie: rompi link entranti.
+			db.plan.days[dayIdx].exercises.forEach(e => { if (e.superSetWith === exId) e.superSetWith = ""; });
+
+			saveData();
+			cancelResetForm();
+			renderPlanTab();
+		}
+
 		function startEditExercise(dIdx, eIdx) {
 			currentEditState = { dayIdx: dIdx, exIdx: eIdx };
 			const ex = db.plan.days[dIdx].exercises[eIdx];
 			document.getElementById('plan-day-select').value = dIdx;
 			document.getElementById('plan-exercise-name').value = ex.name;
+
+			// Ramo CIRCUITO: popola i campi dedicati e commuta il form in modalità circuito.
+			if (ex.type === 'circuit') {
+				document.getElementById('plan-entry-type').value = 'circuit';
+				document.getElementById('plan-circuit-rounds').value = ex.rounds || 3;
+				document.getElementById('plan-circuit-rest').value = ex.restSeconds !== undefined ? ex.restSeconds : 60;
+				document.getElementById('plan-circuit-note').value = ex.note || '';
+				// Copia profonda degli item nella bozza (per non mutare il piano durante l'edit).
+				circuitDraftItems = (ex.items || []).map(it => ({ name: it.name, reps: it.reps, weight: it.weight, measure: exMeasure(it) }));
+				if (circuitDraftItems.length === 0) circuitDraftItems.push({ name: "", reps: 10, weight: 0, measure: 'reps' });
+				toggleExerciseFormType();
+				document.getElementById('form-exercise-title').innerText = "✏️ Modifica Circuito";
+				document.getElementById('btn-save-exercise').innerText = "Aggiorna Circuito";
+				document.getElementById('btn-cancel-edit').classList.remove('hidden');
+				document.getElementById('form-exercise-title').scrollIntoView({ behavior: 'smooth' });
+				return;
+			}
+
+			// Esercizio singolo: assicura che il form sia in modalità 'single'.
+			document.getElementById('plan-entry-type').value = 'single';
+			toggleExerciseFormType();
+			document.getElementById('plan-measure').value = exMeasure(ex);
+			toggleMeasureLabels();
 			document.getElementById('plan-sets').value = ex.sets;
 			document.getElementById('plan-reps').value = ex.reps;
 			document.getElementById('plan-weight').value = ex.weight;
@@ -1411,11 +2089,20 @@
 		function cancelResetForm() {
 			currentEditState = { dayIdx: null, exIdx: null };
 			document.getElementById('plan-exercise-name').value = '';
+			const measureSel = document.getElementById('plan-measure'); if (measureSel) measureSel.value = 'reps';
+			toggleMeasureLabels();
 			document.getElementById('plan-sets').value = 4;
 			document.getElementById('plan-reps').value = 10;
 			document.getElementById('plan-weight').value = 0;
             document.getElementById('plan-rest').value = 90;
 			document.getElementById('plan-note').value = '';
+			// Reset campi/bozza circuito e ritorno alla modalità "Esercizio Singolo".
+			circuitDraftItems = [];
+			const rounds = document.getElementById('plan-circuit-rounds'); if (rounds) rounds.value = 3;
+			const crest = document.getElementById('plan-circuit-rest'); if (crest) crest.value = 60;
+			const cnote = document.getElementById('plan-circuit-note'); if (cnote) cnote.value = '';
+			const entryType = document.getElementById('plan-entry-type'); if (entryType) entryType.value = 'single';
+			toggleExerciseFormType();
 			document.getElementById('form-exercise-title').innerText = "2. Aggiungi Esercizio alla Scheda";
 			document.getElementById('btn-save-exercise').innerText = "Salva Esercizio";
 			document.getElementById('btn-cancel-edit').classList.add('hidden');
@@ -1487,16 +2174,36 @@
 					<ul class="space-y-2">
 						${day.exercises.length === 0 ? '<li class="text-gray-500 text-xs py-1">Nessun esercizio inserito.</li>' : ''}
 						${day.exercises.map((ex, eIdx) => {
-							const partner = ex.superSetWith ? day.exercises.find(e => e.id === ex.superSetWith) : null;
+							const isCircuit = ex.type === 'circuit';
+							const partner = (!isCircuit && ex.superSetWith) ? day.exercises.find(e => e.id === ex.superSetWith) : null;
 							const primaryOf = day.exercises.find(e => e.superSetWith === ex.id);
+							// Riga di dettaglio: circuito vs esercizio normale.
+							const detailRow = isCircuit
+								? `<div class="mt-1.5 text-[11px] text-gray-400">
+										<div class="flex justify-between">
+											<span class="text-amber-400 font-bold">🔄 ${ex.rounds || 0} giri | ⏱️ ${ex.restSeconds || 60}s a fine giro</span>
+											<span class="text-amber-400 font-bold uppercase text-[9px]">Circuito</span>
+										</div>
+										<ol class="list-decimal list-inside mt-1 text-gray-300">
+											${(ex.items || []).map(it => `<li>${esc(it.name)} — ${it.reps} ${measureUnit(it)}${(it.weight > 0) ? ` @ ${it.weight} kg` : ''}${isTimed(it) ? ' ⏱️' : ''}</li>`).join('')}
+										</ol>
+									</div>`
+								: `<div class="flex justify-between text-gray-400 mt-1.5 text-[11px]">
+										<span>Base: ${ex.sets}x${ex.reps} ${measureUnit(ex)}${(ex.weight > 0) ? ` @ ${ex.weight}kg` : ''} | ⏱️ ${ex.restSeconds || 90}s${isTimed(ex) ? ' · a tempo' : ''}</span>
+										<span class="text-indigo-400 font-bold uppercase text-[9px]">
+											${ex.progression === 'custom_table' ? 'Tabella Settimanale' : ex.progression}
+										</span>
+									</div>`;
 							return `
 							<li class="bg-gray-700/40 p-2.5 rounded-lg text-xs">
 								<div class="flex justify-between items-center">
 									<div>
 										<span class="font-bold text-gray-200 text-sm">${esc(ex.name)}</span>
+										${isCircuit ? `<span class="inline-block bg-amber-950/80 text-amber-300 border border-amber-800/60 text-[9px] font-bold px-1.5 py-0.5 rounded-md mt-0.5 ml-1.5">🔄 CIRCUITO</span>` : ''}
 										${partner ? `<span class="inline-block bg-purple-950/80 text-purple-300 border border-purple-800/60 text-[9px] font-bold px-1.5 py-0.5 rounded-md mt-0.5 ml-1.5">🔗 SS con: ${esc(partner.name)}</span>` : ''}
 										${primaryOf ? `<span class="inline-block bg-gray-900/80 text-gray-400 border border-gray-600/60 text-[9px] font-bold px-1.5 py-0.5 rounded-md mt-0.5 ml-1.5">↳ registrato con: ${esc(primaryOf.name)}</span>` : ''}
-										${ex.note ? `<span class="block text-[11px] text-amber-400 italic mt-0.5">📝 ${esc(ex.note)}</span>` : ''}
+										${(!isCircuit && ex.note) ? `<span class="block text-[11px] text-amber-400 italic mt-0.5">📝 ${esc(ex.note)}</span>` : ''}
+										${(isCircuit && ex.note) ? `<span class="block text-[11px] text-amber-400 italic mt-0.5">📝 ${esc(ex.note)}</span>` : ''}
 									</div>
 									<div class="flex gap-2 items-center">
                                         <div class="flex flex-col gap-0.5 mr-1">
@@ -1507,12 +2214,7 @@
 										<button onclick="removeExercise(${dIdx}, ${eIdx})" class="text-red-400 bg-red-950/40 border border-red-900/50 px-2 py-0.5 rounded text-[10px]">❌</button>
 									</div>
 								</div>
-								<div class="flex justify-between text-gray-400 mt-1.5 text-[11px]">
-									<span>Base: ${ex.sets}x${ex.reps} @ ${ex.weight}kg | ⏱️ ${ex.restSeconds || 90}s</span>
-									<span class="text-indigo-400 font-bold uppercase text-[9px]">
-										${ex.progression === 'custom_table' ? 'Tabella Settimanale' : ex.progression}
-									</span>
-								</div>
+								${detailRow}
 							</li>
 						`;
 						}).join('')}
@@ -1525,9 +2227,15 @@
 			const select = document.getElementById('chart-exercise-select');
 			if (!select) return;
 			let distinctExercises = [];
+			const addName = (n) => { if (n && !distinctExercises.includes(n)) distinctExercises.push(n); };
 			db.plan.days.forEach(day => {
 				day.exercises.forEach(ex => {
-					if(!distinctExercises.includes(ex.name)) distinctExercises.push(ex.name);
+					// Un circuito non ha una propria linea di volume: la tengono i suoi item (per nome).
+					if (ex.type === 'circuit') {
+						(ex.items || []).forEach(it => addName(it.name));
+					} else {
+						addName(ex.name);
+					}
 				});
 			});
 			if(distinctExercises.length === 0) {
@@ -1554,16 +2262,32 @@
 			canvas.classList.remove('hidden');
 
 			const labels = filteredLogs.map(log => `${log.date} (Sett. ${log.week})`);
-			const dataPoints = filteredLogs.map(log => {
-				return log.sets.reduce((total, set) => total + (set.weight * set.reps), 0);
-			});
+
+			// Per esercizi a TEMPO (log.measure === 'time', in cui `reps` = secondi):
+			//  - se c'è una zavorra (qualche set con peso > 0) → metrica = carico × secondi
+			//  - altrimenti → secondi totali tenuti (progressione della durata)
+			// Per esercizi a reps: tonnellaggio classico (peso × reps). Retrocompat: log senza
+			// `measure` = reps. La scelta della metrica è coerente su tutta la serie (un'unica scala Y).
+			const timed = filteredLogs.some(l => l.measure === 'time');
+			const anyWeighted = filteredLogs.some(l => l.sets.some(s => (s.weight || 0) > 0));
+			let datasetLabel, dataPoints;
+			if (timed && !anyWeighted) {
+				datasetLabel = 'Tempo sotto tensione (secondi totali)';
+				dataPoints = filteredLogs.map(log => log.sets.reduce((t, s) => t + s.reps, 0));
+			} else if (timed && anyWeighted) {
+				datasetLabel = 'Volume a tempo (carico × secondi)';
+				dataPoints = filteredLogs.map(log => log.sets.reduce((t, s) => t + (s.weight * s.reps), 0));
+			} else {
+				datasetLabel = 'Volume Totale (tonnellaggio in kg)';
+				dataPoints = filteredLogs.map(log => log.sets.reduce((t, s) => t + (s.weight * s.reps), 0));
+			}
 
 			volumeChartInstance = new Chart(ctx, {
 				type: 'line',
 				data: {
 					labels: labels,
 					datasets: [{
-						label: 'Volume Totale (tonnellaggio in kg)',
+						label: datasetLabel,
 						data: dataPoints,
 						borderColor: '#818cf8', 
 						backgroundColor: 'rgba(129, 140, 248, 0.15)',
@@ -1624,7 +2348,9 @@
 							db.customWeeks = importedDb.customWeeks || 4;
 							db.plan = importedDb.plan || { days: [] };
 							db.archives = importedDb.archives || [];
-							
+							// Cursore posizione: presente dai backup ≥ v1.7.0; assente nei vecchi → null (riparte da S1·G1·E1).
+							db.cursor = importedDb.cursor || null;
+
 							saveData();
 							alert("Importazione completata con successo!");
 							location.reload();
@@ -1652,7 +2378,7 @@
 		function fullAppReset() {
 			if(confirm("💥 Cancellare tutto DEFINITIVAMENTE? Perderai schede attive, archivio e grafici.")) {
 				localStorage.clear();
-				db = { history: [], last_day_index: -1, planType: "brunaccioni", customWeeks: 4, plan: JSON.parse(JSON.stringify(initialPlan)), archives: [] };
+				db = { history: [], last_day_index: -1, planType: "brunaccioni", customWeeks: 4, plan: JSON.parse(JSON.stringify(initialPlan)), archives: [], cursor: null };
 				saveData();
 				switchTab('workout');
 				alert("Applicazione resettata.");
@@ -1676,7 +2402,13 @@
 						<span class="text-gray-400 font-medium">${esc(log.date)}</span>
 					</div>
 					<div class="grid grid-cols-2 gap-1 text-[11px] text-gray-300">
-						${log.sets.map((set, idx) => `<span>Serie ${idx+1}: <strong>${esc(set.weight)}kg</strong> x ${esc(set.reps)} rep</span>`).join('')}
+						${log.sets.map((set, idx) => {
+							// log.measure === 'time' → `reps` sono secondi. Retrocompat: assente = reps.
+							const isT = log.measure === 'time';
+							const qty = isT ? `${esc(set.reps)} sec` : `${esc(set.reps)} rep`;
+							const wt = (set.weight > 0) ? `<strong>${esc(set.weight)}kg</strong> x ` : '';
+							return `<span>Serie ${idx+1}: ${wt}${qty}</span>`;
+						}).join('')}
 					</div>
 				</div>
 			`).join('');

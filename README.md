@@ -12,6 +12,8 @@ I dati restano **solo sul tuo dispositivo** (nel `localStorage` del browser); no
   - ⏱️ **Timer di recupero** integrato: **si avvia da solo** dopo il salvataggio di una serie e riparte dal tempo pieno; resta comunque libero di **pausa / riprendi / reset** in qualsiasi momento. Avviso a fine tempo (vibrazione + segnale acustico).
   - ⏭️ **Auto-avanzamento**: al salvataggio di un esercizio passa in automatico al successivo → a giorno completato al giorno dopo → a settimana completata alla settimana dopo → a programma finito ricomincia da Settimana 1 · Giorno 1. La selezione manuale di settimana/giorno/esercizio resta sempre disponibile.
   - 🔗 Supporto **Super Serie** (esercizio A + B in coppia): il secondario viene registrato insieme al primario (niente doppio conteggio del volume).
+  - 🔄 Supporto **Circuito** (N esercizi in fila senza pausa, poi un recupero, ripetuto per più giri): registrazione un giro alla volta, peso opzionale, ogni esercizio ha la sua linea di volume.
+  - ⏱️ Supporto **esercizi a tempo** (plank, wall sit, farmer's carry…): misurati in secondi con un **cronometro** integrato, sia standalone sia dentro circuiti/super serie.
   - Badge "**Ultimo fatto / Prossimo suggerito**" per non perdere il filo della rotazione dei giorni.
 - **📅 Programma** — Crei e modifichi la scheda: giorni, esercizi (serie, ripetizioni, peso, recupero, nota logistica), riordino su/giù degli esercizi e **archivio** di più schede salvate.
 - **📊 Analisi** — Grafico a linee del **tonnellaggio totale** (somma di peso × ripetizioni di ogni serie completata) per ciascun esercizio, per visualizzare la progressione del volume.
@@ -91,6 +93,33 @@ I dati vivono nel `localStorage` del browser: **cancellare i dati di navigazione
 ---
 
 ## 📝 Changelog
+
+### v1.7.0
+- **La posizione nel workout ora è persistente (settimana + giorno + esercizio)**: prima, cambiando tab e tornando su *Workout*, la **settimana ripartiva da 1** e — se avevi salvato anche solo un esercizio — l'app **saltava al giorno successivo** anche a giorno non finito. Ora un *cursore* salvato ricorda esattamente dove sei (fase/settimana, giorno ed esercizio) e lo ripristina al rientro. L'auto-avanzamento (esercizio → giorno → settimana → riavvio) e la selezione manuale restano invariati; il badge "Ultimo fatto" continua a indicare l'ultimo giorno completato.
+- **Esercizi a tempo — avviso al raggiungimento del target**: quando il cronometro raggiunge i secondi target dell'esercizio, parte **la stessa vibrazione + suono** del timer di recupero (una sola volta) e il display diventa **ambra**, **senza fermare il cronometro** — così puoi anche superare il target restando avvisato del traguardo.
+- **Fix layout cronometro su schermi stretti**: nel Workout, per gli esercizi a tempo, il pulsante **"Azzera" non si sovrappone più al campo "Carico"**. Il cronometro ora occupa tutta la larghezza e il "Carico" va sotto (prima erano affiancati e si accavallavano su telefoni stretti).
+
+### v1.6.2
+- **Cronometro esercizi a tempo più chiaro**: rimossa la casella dei secondi modificabile a mano, che affiancata al cronometro mostrava lo stesso numero due volte e confondeva. Ora c'è **solo il cronometro** (display in m:ss + Avvia/Stop + Azzera); il valore registrato è quello del cronometro. Il target resta come riferimento accanto all'etichetta.
+
+### v1.6.1
+- **Fix cronometro esercizi a tempo**: il campo dei secondi partiva pre-compilato con il valore *target* (es. 10) invece che da 0, quindi il cronometro contava da 10 in su. Ora il campo parte da **0** (il target resta mostrato come semplice riferimento accanto all'etichetta) e, dopo aver salvato una serie/giro, i campi a tempo si **azzerano automaticamente** per la ripetizione successiva.
+
+### v1.6.0
+- **Esercizi a tempo (tempo sotto tensione)**: nuova **misura** per gli esercizi isometrici/a tempo — plank, wall sit, hollow hold, dead hang, farmer's carry, ecc. Ogni esercizio (singolo, dentro un circuito o in super serie) può ora essere misurato in **secondi** invece che in ripetizioni.
+  - In **Pianificazione** un selettore *Misura* (Ripetizioni / Tempo) sull'esercizio singolo, e un selettore per **ogni riga** del circuito (così un circuito può mischiare reps e tempo, es. *Plank 40s + Crunch 15 rep*). Il **peso resta opzionale** (0 per il corpo libero, ma sono supportate le varianti zavorrate).
+  - In **Workout** gli esercizi a tempo mostrano un **cronometro** (Avvia/Stop/Azzera) che conta i secondi mentre esegui e **compila da solo il campo** (correggibile a mano). È separato dal timer di recupero, che parte come sempre a fine serie/giro.
+  - In **Analisi** la metrica si adatta da sola: per gli esercizi a tempo traccia i **secondi totali** tenuti (o **carico × secondi** se usi una zavorra), invece del tonnellaggio.
+
+### v1.5.0
+- **Nuova modalità Circuito**: oltre all'esercizio singolo e alla super serie, ora puoi creare un **Circuito** — più esercizi eseguiti in fila **senza pausa tra loro**, con **un solo recupero a fine giro**, ripetuto per il numero di giri scelto. Esempio: *Circuito x3 → Curl addome 15 rep, Curl addome basso 10 rep, 60s di recupero*, il tutto per 3 volte.
+  - In **Pianificazione** un selettore *Tipo* (Esercizio Singolo / Circuito) mostra il form dedicato: numero giri, recupero di fine giro e una **lista dinamica di esercizi** (aggiungi/rimuovi/**riordina con ▲▼**). Il **peso è opzionale** (lascialo a 0 per gli esercizi a corpo libero).
+  - In **Workout** il circuito si registra **un giro alla volta** (tutti gli esercizi insieme); al salvataggio del giro parte in automatico il recupero, con l'indicatore *"(ultima)"* sull'ultimo giro previsto.
+  - In **Analisi** ogni esercizio del circuito ottiene la **propria linea di volume** individuale (non un blocco aggregato).
+
+### v1.4.0
+- **Avviso di fine recupero anche a schermo spento / app in background** (Android): oltre a vibrazione + beep, l'app mostra ora una **notifica di sistema** al termine del timer. È l'unico canale che il telefono fa vibrare e suonare quando la pagina non è in primo piano — la Vibration API del browser, in quel caso, viene *ignorata dal sistema* (limite di piattaforma, non un bug). Il permesso Notifiche viene chiesto una sola volta, all'avvio di un timer. Toccando la notifica si riapre l'app.
+- **Timer di recupero immune al congelamento in background**: il conteggio ora si basa sull'**orario di fine assoluto** invece che sul semplice decremento al secondo. I browser mobili rallentano o congelano i timer JavaScript delle pagine non visibili; con questo cambiamento, riaprendo l'app il tempo mostrato è sempre corretto e l'avviso scatta immediatamente se il recupero è già scaduto.
 
 ### v1.3.0
 - **Sessione persistente al cambio tab**: cambiando tab durante un esercizio (per errore o per consultare altro) e tornando su *Workout*, le serie già registrate e il timer di recupero **non vengono più azzerati** — la sessione riprende esattamente da dov'era (il timer continua a scorrere anche mentre si è su un altro tab). La reinizializzazione avviene solo quando non c'è una sessione in corso.

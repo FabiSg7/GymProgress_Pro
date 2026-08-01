@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gym-tracker-v1.3.0';
+const CACHE_NAME = 'gym-tracker-v1.7.0';
 
 // Asset locali: OBBLIGATORI per il funzionamento offline (cache atomica).
 const LOCAL_ASSETS = [
@@ -68,6 +68,20 @@ self.addEventListener('fetch', (event) => {
         }
         return networkResponse;
       }).catch(() => cachedResponse); // offline e non in cache: lascia fallire nel modo naturale
+    })
+  );
+});
+
+// Tap sulla notifica di fine recupero: porta in primo piano una scheda dell'app già aperta
+// (o ne apre una nuova) invece di lasciare l'utente sulla schermata di sistema.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if ('focus' in client) return client.focus();
+      }
+      if (self.clients.openWindow) return self.clients.openWindow('./');
     })
   );
 });
