@@ -1,6 +1,6 @@
 <!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <body style="background:#111;color:#eee;font-family:sans-serif;padding:8px">
-<h3>GymProgress Decoder v6</h3>
+<h3>GymProgress Decoder v7</h3>
 <p>Scatta le foto dei QR con la <b>fotocamera del telefono</b>, poi qui premi
 "Scegli file" e <b>seleziona piu foto dalla galleria</b>. Ti dico foto per foto se sono OK,
 con <b>avanzamento live</b> (X/Y foto) mentre elaboro. Il set include un <b>QR-mappa</b>
@@ -15,7 +15,7 @@ che mi insegna i nomi dei file: cosi leggo anche file nuovi senza aggiornarmi.</
 var B='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:';
 // Nomi di default (fallback). Il set porta anche un QR-MAPPA (id 0) che AGGIORNA questa
 // tabella a runtime: cosi file NUOVI ottengono il nome giusto senza modificare il decoder.
-var N={1:'index.html',2:'sw.js',3:'manifest.json',4:'README.md',5:'decoder4.html'};
+var N={1:'index.html',2:'sw.js',3:'manifest.json',4:'README.md',5:'Decoder.html'};
 var K='gpqr4',KM='gpqr4map';
 var F={};try{F=JSON.parse(localStorage.getItem(K)||'{}')}catch(e){F={}}
 // Mappa nomi appresa in una sessione precedente (sovrascrive i default).
