@@ -1,8 +1,10 @@
 <!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <body style="background:#111;color:#eee;font-family:sans-serif;padding:8px">
-<h3>GymProgress Decoder v4</h3>
+<h3>GymProgress Decoder v6</h3>
 <p>Scatta le foto dei QR con la <b>fotocamera del telefono</b>, poi qui premi
-"Scegli file" e <b>seleziona piu foto dalla galleria</b>. Ti dico foto per foto se sono OK.</p>
+"Scegli file" e <b>seleziona piu foto dalla galleria</b>. Ti dico foto per foto se sono OK,
+con <b>avanzamento live</b> (X/Y foto) mentre elaboro. Il set include un <b>QR-mappa</b>
+che mi insegna i nomi dei file: cosi leggo anche file nuovi senza aggiornarmi.</p>
 <input id=inp type=file accept=image/* multiple>
 <button onclick=AZ()>Azzera tutto</button>
 <div id=res style="font-size:13px;margin:8px 0;white-space:pre-wrap"></div>
@@ -11,15 +13,32 @@
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js" onload="LG('jsQR pronto')" onerror="LG('jsQR NON caricato: serve internet')"></script>
 <script>
 var B='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:';
-var N={1:'index.html',2:'sw.js',3:'manifest.json',4:'README.md'};
-var K='gpqr4';
+// Nomi di default (fallback). Il set porta anche un QR-MAPPA (id 0) che AGGIORNA questa
+// tabella a runtime: cosi file NUOVI ottengono il nome giusto senza modificare il decoder.
+var N={1:'index.html',2:'sw.js',3:'manifest.json',4:'README.md',5:'decoder4.html'};
+var K='gpqr4',KM='gpqr4map';
 var F={};try{F=JSON.parse(localStorage.getItem(K)||'{}')}catch(e){F={}}
+// Mappa nomi appresa in una sessione precedente (sovrascrive i default).
+try{var _lm=JSON.parse(localStorage.getItem(KM)||'null');if(_lm)for(var _k in _lm)N[_k]=_lm[_k]}catch(e){}
 function LG(m){document.getElementById('log').textContent+=m+'\n'}
 function SV(){try{localStorage.setItem(K,JSON.stringify(F))}catch(e){LG('save fail '+e)}}
-function AZ(){if(confirm('Azzerare tutti i QR letti?')){F={};localStorage.removeItem(K);R();document.getElementById('res').textContent=''}}
+function AZ(){if(confirm('Azzerare tutti i QR letti?')){F={};localStorage.removeItem(K);localStorage.removeItem(KM);R();document.getElementById('res').textContent=''}}
 LG('BarcodeDetector: '+('BarcodeDetector' in window?'si':'no (uso jsQR)'));
 function d45(s){var o=[],i;for(i=0;i<s.length;i+=3){var c=s.substr(i,3);if(c.length==3){var n=B.indexOf(c[0])+B.indexOf(c[1])*45+B.indexOf(c[2])*2025;o.push(n>>8,n&255)}else if(c.length==2){o.push(B.indexOf(c[0])+B.indexOf(c[1])*45)}}return new Uint8Array(o)}
-function add(t){var m=/^GP:(\d+):(\d+):(\d+):([^]*)$/.exec(t);if(!m)return null;var f=+m[1];(F[f]=F[f]||{n:+m[3],p:{}}).p[+m[2]]=m[4];SV();return N[f]+' '+m[2]+'/'+m[3]}
+// Ritorna: {ok:'testo'} letto | {map:n} appresi n nomi | {boot:true} QR bootstrap decoder | null sconosciuto.
+function add(t){
+  var m=/^GP:(\d+):(\d+):(\d+):([^]*)$/.exec(t);
+  if(m){
+    var f=+m[1];
+    if(f===0){ // QR-MAPPA: payload = base45(JSON {id:nome}). Aggiorna N e lo salva.
+      try{var js=new TextDecoder().decode(d45(m[4]));var mp=JSON.parse(js);var c=0;for(var k in mp){N[k]=mp[k];c++}localStorage.setItem(KM,JSON.stringify(mp));return {map:c}}catch(e){return null}
+    }
+    (F[f]=F[f]||{n:+m[3],p:{}}).p[+m[2]]=m[4];SV();
+    return {ok:(N[f]||('F'+f))+' '+m[2]+'/'+m[3]};
+  }
+  if(/^D4 \d+\/\d+/.test(t))return {boot:true}; // QR di bootstrap del decoder (si incolla a mano, non qui)
+  return null;
+}
 function R(){var h='';for(var f in F){var o=F[f],got=Object.keys(o.p).length,miss=[];for(var i=1;i<=o.n;i++)if(!o.p[i])miss.push(i);h+='<b>'+(N[f]||f)+'</b> '+got+'/'+o.n+(got==o.n?' <button onclick=S('+f+')>Salva file</button>':' mancano: '+miss.join(','))+'<br>'}document.getElementById('o').innerHTML=h||'(nessun QR ancora)'}
 async function S(f){var o=F[f],e='';for(var i=1;i<=o.n;i++)e+=o.p[i];var gz=d45(e);var r=await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([r]));a.download=N[f]||('F'+f);a.click();LG('scaricato '+N[f]+' '+r.byteLength+'B')}
 async function tryDecode(bmp){
@@ -28,15 +47,28 @@ async function tryDecode(bmp){
  return null}
 async function p(files){
  var out=[];
+ var tot=files.length,done=0,ok=0,res=document.getElementById('res');
+ res.textContent='[..] Elaboro 0/'+tot+' foto...';
+ await new Promise(function(r){setTimeout(r,0)}); // fa comparire subito la barra di stato
  for(var f of files){
    var line;
    try{var bmp=await createImageBitmap(f);var t=await tryDecode(bmp);
-     if(t){var info=add(t);line=info?('OK   '+f.name+' -> '+info):('IGNORATA '+f.name+' (QR non del set)')}
+     if(bmp.close)bmp.close(); // libera la memoria del bitmap: gestisce tante foto senza esaurire la RAM
+     if(t){
+       var info=add(t);
+       if(info&&info.ok){ok++;line='OK   '+f.name+' -> '+info.ok}
+       else if(info&&info.map!=null){line='MAPPA '+f.name+' -> appresi '+info.map+' nomi file'}
+       else if(info&&info.boot){line='BOOTSTRAP '+f.name+' -> e un QR del DECODER: leggilo con Google Lens e incollalo, non caricarlo qui'}
+       else line='SCONOSCIUTO '+f.name+' -> QR valido ma non di questo set';
+     }
      else line='SCARTA '+f.name+' -> nessun QR leggibile, RIFAI la foto (piu vicino/a fuoco)';
    }catch(err){line='ERRORE '+f.name+' -> '+err}
-   out.push(line);
+   out.push(line);done++;
+   // Progresso LIVE: aggiornato a ogni foto (prima si vedeva solo il risultato finale -> sembrava bloccato).
+   res.textContent='[..] Elaboro '+done+'/'+tot+' foto ('+ok+' QR letti)...\n\n'+out.join('\n');
+   await new Promise(function(r){setTimeout(r,0)}); // cede il thread al browser -> ridisegna la UI
  }
- document.getElementById('res').textContent=out.join('\n');
+ res.textContent='[OK] Fatto: '+done+'/'+tot+' foto, '+ok+' QR nuovi letti.\n\n'+out.join('\n');
  R();navigator.vibrate&&navigator.vibrate(40);
 }
 document.getElementById('inp').addEventListener('change',function(e){var fs=[].slice.call(e.target.files);p(fs).then(function(){e.target.value=''})});
