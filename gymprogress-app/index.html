@@ -349,7 +349,7 @@
 
     <script>
         // Parametro Globale Unico di Versione dell'Applicazione
-        const APP_VERSION = '1.7.0';
+        const APP_VERSION = '1.8.0';
 
 		// Database pre-caricato completo
 		const initialPlan = {
@@ -411,6 +411,15 @@
 		let currentCircuit = null;   // riferimento all'oggetto circuito attivo nel Workout (o null)
 		let circuitDraftItems = [];  // bozza degli item del circuito nel form di Pianificazione
 
+		// Sessione IN CORSO salvata su disco (fix #2 v1.8.0): letta UNA volta al boot. currentSessionSets
+		// vive solo in RAM, quindi se il browser scarta la scheda in background (schermo bloccato a lungo /
+		// pressione memoria) i giri non ancora "Completati" andrebbero persi al reload. La rispecchiamo in
+		// localStorage a ogni modifica (persistSessionState) e la ripristiniamo se combacia con l'esercizio
+		// corrente (initOrRestoreSessionSets). Consumata una sola volta → nessun ripristino su cambi manuali.
+		let pendingSessionRestore = (() => {
+			try { return JSON.parse(localStorage.getItem('gym_session')) || null; } catch (e) { return null; }
+		})();
+
 		// Riferimenti all'esercizio (e all'eventuale partner di super serie) attivi nel Workout:
 		// servono a conoscere la MISURA (reps vs tempo) in fase di add/edit/save senza risondare il piano.
 		let currentExerciseRef = null;
@@ -431,6 +440,10 @@
         // true quando l'alert di fine recupero è già stato emesso per il ciclo corrente:
         // evita doppi trigger (es. tick residuo + ricalcolo su visibilitychange).
         let alertFired = false;
+        // Screen Wake Lock attivo mentre il recupero è in corso (v1.8.0): impedisce allo schermo
+        // di spegnersi da solo per inattività, così il browser NON congela il timer JS e l'alert
+        // di fine recupero scatta puntuale invece di partire solo allo sblocco. null = nessun lock.
+        let wakeLock = null;
 
 		// --- Identità stabile degli esercizi (id per-slot) ---
 		// (__exIdCounter è dichiarato più in alto, prima della chiamata a migrateData)
@@ -532,6 +545,48 @@
 				exIdx: exSel.value === "" ? 0 : (parseInt(exSel.value, 10) || 0)
 			};
 			saveData();
+		}
+
+		// Rispecchia la sessione IN CORSO (giri/serie non ancora "Completati") su localStorage (fix #2
+		// v1.8.0). currentSessionSets vive solo in RAM: se il browser scarta la scheda a schermo bloccato,
+		// al reload andrebbe persa. Chiamata a ogni aggiunta/modifica/eliminazione di serie nel Workout.
+		// Se non c'è nulla in corso rimuove la chiave (niente da ripristinare).
+		function persistSessionState() {
+			const daySel = document.getElementById('workout-day-select');
+			const exSel = document.getElementById('active-exercise-select');
+			if (!daySel || !exSel) return;
+			if (currentSessionSets.length === 0) { localStorage.removeItem('gym_session'); return; }
+			const exId = (currentExerciseRef && currentExerciseRef.id) ? currentExerciseRef.id : null;
+			localStorage.setItem('gym_session', JSON.stringify({
+				dayIdx: daySel.value, exIdx: exSel.value, exId: exId,
+				mode: currentSessionMode, sets: currentSessionSets
+			}));
+		}
+
+		// Elimina la sessione salvata: a sessione completata/salvata o quando i dati vengono azzerati.
+		function clearSessionState() {
+			localStorage.removeItem('gym_session');
+		}
+
+		// Inizializza currentSessionSets all'apertura di un esercizio: ripristina i giri/serie salvati
+		// SOLO se il backup su disco combacia con l'esercizio attivo (stesso giorno/indice/id e modalità);
+		// altrimenti parte pulita. È ONE-SHOT: consuma il pending al primo uso, così il ripristino avviene
+		// solo al boot e i normali cambi di esercizio ripartono sempre da zero (fix #2 v1.8.0).
+		function initOrRestoreSessionSets() {
+			const p = pendingSessionRestore;
+			pendingSessionRestore = null; // consuma comunque: il ripristino vale solo al primo boot
+			const daySel = document.getElementById('workout-day-select');
+			const exSel = document.getElementById('active-exercise-select');
+			const exId = (currentExerciseRef && currentExerciseRef.id) ? currentExerciseRef.id : null;
+			if (p && Array.isArray(p.sets) && p.sets.length > 0 &&
+				p.mode === currentSessionMode && p.exId === exId &&
+				daySel && exSel &&
+				String(p.dayIdx) === String(daySel.value) &&
+				String(p.exIdx) === String(exSel.value)) {
+				currentSessionSets = p.sets;
+			} else {
+				currentSessionSets = [];
+			}
 		}
 
 		function switchTab(tabId) {
@@ -770,6 +825,9 @@
 			const sw = { base, startEpoch: Date.now(), intervalId: null, target, targetFired: base >= target && target > 0 };
 			sw.intervalId = setInterval(() => tickStopwatch(repsId), 200);
 			exerciseStopwatches[repsId] = sw;
+			// Tieni lo schermo acceso mentre il cronometro conta (v1.8.0): durante un plank/wall sit hai
+			// le mani occupate, il telefono si spegne per inattività e l'avviso al target non partirebbe.
+			acquireWakeLock();
 			const btn = document.getElementById(`stopwatch-btn-${repsId}`);
 			if (btn) { btn.innerText = "⏸ Stop"; btn.className = "bg-red-500 hover:bg-red-600 text-white font-bold px-2 py-1 rounded text-[10px]"; }
 			tickStopwatch(repsId);
@@ -800,12 +858,13 @@
 			clearInterval(sw.intervalId);
 			tickStopwatch(repsId); // fissa il valore finale nell'input
 			delete exerciseStopwatches[repsId];
+			updateWakeLock(); // cronometro fermato: rilascia lo schermo se nessun altro consumer è attivo
 			const btn = document.getElementById(`stopwatch-btn-${repsId}`);
 			if (btn) { btn.innerText = "▶ Riprendi"; btn.className = "bg-emerald-600 hover:bg-emerald-700 text-slate-900 font-bold px-2 py-1 rounded text-[10px]"; }
 		}
 		function resetStopwatch(repsId) {
 			const sw = exerciseStopwatches[repsId];
-			if (sw) { clearInterval(sw.intervalId); delete exerciseStopwatches[repsId]; }
+			if (sw) { clearInterval(sw.intervalId); delete exerciseStopwatches[repsId]; updateWakeLock(); }
 			const input = document.getElementById(repsId);
 			if (input) input.value = 0;
 			const disp = document.getElementById(`stopwatch-disp-${repsId}`);
@@ -823,6 +882,7 @@
 		function clearAllStopwatches() {
 			Object.keys(exerciseStopwatches).forEach(id => clearInterval(exerciseStopwatches[id].intervalId));
 			exerciseStopwatches = {};
+			updateWakeLock(); // nessun cronometro attivo: rilascia lo schermo se non serve al timer
 		}
 
 		function startExerciseSession() {
@@ -941,7 +1001,8 @@
 				completeBtn.innerText = isSuperSet ? "✅ Super Serie Completata" : "✅ Esercizio Completato";
 			}
 
-			currentSessionSets = [];
+			// Ripristina i set salvati se combaciano con questo esercizio (solo al boot), altrimenti []
+			initOrRestoreSessionSets();
             editingSetIndex = null;
 			renderCurrentSets();
 			updateSetCounter();
@@ -1001,7 +1062,8 @@
 			const completeBtn = document.getElementById('btn-complete-workout');
 			if (completeBtn) completeBtn.innerText = "✅ Circuito Completato";
 
-			currentSessionSets = [];
+			// Ripristina i giri salvati se combaciano con questo circuito (solo al boot), altrimenti []
+			initOrRestoreSessionSets();
 			editingSetIndex = null;
 			renderCurrentSets();
 			updateSetCounter();
@@ -1044,12 +1106,48 @@
             }
         }
 
+        // Acquisisce lo Screen Wake Lock (schermo sempre acceso) mentre il recupero è attivo (v1.8.0).
+        // Motivo: a schermo spento il browser CONGELA i timer JS della pagina → tickTimer() non gira
+        // e l'alert di fine recupero non parte (partiva solo allo sblocco). Tenendo acceso lo schermo
+        // il timer resta vivo e l'avviso scatta puntuale. Silenzioso: se l'API manca o il gesto non è
+        // valido, l'app resta pienamente funzionante (fallback: ricalcolo su visibilitychange). Se poi
+        // l'utente blocca lo schermo A MANO, il sistema rilascia comunque il lock → si torna al vecchio
+        // comportamento (alert allo sblocco), coperto dal listener visibilitychange qui sotto.
+        async function acquireWakeLock() {
+            if (!('wakeLock' in navigator) || wakeLock) return;
+            try {
+                wakeLock = await navigator.wakeLock.request('screen');
+                // Il sistema può rilasciarlo da sé (es. schermo bloccato a mano): azzera il riferimento.
+                wakeLock.addEventListener('release', () => { wakeLock = null; });
+            } catch (e) { wakeLock = null; /* permesso/gesto non valido: nessun lock, non bloccante */ }
+        }
+
+        // Rilascia il Wake Lock (schermo libero di spegnersi). Basso livello: NON chiamarla diretta
+        // dai consumer (timer/cronometro), usa updateWakeLock() che verifica prima gli altri consumer.
+        function releaseWakeLock() {
+            if (wakeLock) {
+                try { wakeLock.release(); } catch (e) { /* già rilasciato */ }
+                wakeLock = null;
+            }
+        }
+
+        // Decide se lo schermo va tenuto acceso in base a TUTTI i consumer del Wake Lock (v1.8.0):
+        // il timer di recupero attivo O almeno un cronometro esercizi-a-tempo attivo. Ogni RILASCIO
+        // passa di qui, così fermare un consumer non spegne lo schermo se un altro serve ancora.
+        function updateWakeLock() {
+            const needed = (timerInterval !== null) || (Object.keys(exerciseStopwatches).length > 0);
+            if (needed) acquireWakeLock(); else releaseWakeLock();
+        }
+
         // Avvia il countdown (no-op se è già in corso). Usato sia dai pulsanti sia dall'auto-avvio.
         function startTimerCountdown() {
             if (timerInterval) return;
             // Richiesta permesso Notifiche agganciata al gesto utente (tap Avvia / salvataggio serie):
             // serve per l'avviso di sistema a schermo spento (vedi showRestDoneNotification()).
             ensureNotificationPermission();
+            // Tieni lo schermo acceso per tutta la durata del recupero (v1.8.0): evita il congelamento
+            // del timer in background. Rilasciato a fine/pausa/reset del timer.
+            acquireWakeLock();
             // (Ri)calcola l'ISTANTE assoluto di fine dal tempo rimanente corrente: copre sia
             // l'avvio da fermo sia la ripresa dopo una pausa. Il tick ne deriva il rimanente,
             // quindi il conteggio resta corretto anche se il browser congela il timer JS.
@@ -1071,6 +1169,7 @@
             if (remainingMs <= 0) {
                 clearInterval(timerInterval);
                 timerInterval = null;
+                updateWakeLock(); // recupero finito: rilascia lo schermo se nessun cronometro è attivo
                 if (!alertFired) {
                     alertFired = true;
                     triggerAlert();
@@ -1082,6 +1181,7 @@
         function pauseTimerCountdown() {
             clearInterval(timerInterval);
             timerInterval = null;
+            updateWakeLock(); // in pausa rilascia lo schermo, salvo un cronometro ancora attivo
             // Congela il rimanente all'istante della pausa (dall'orologio, non dall'ultimo tick).
             if (timerEndTime !== null) {
                 timerTimeLeft = Math.max(0, Math.ceil((timerEndTime - Date.now()) / 1000));
@@ -1103,6 +1203,7 @@
         function resetTimer() {
             clearInterval(timerInterval);
             timerInterval = null;
+            updateWakeLock(); // timer azzerato: rilascia lo schermo se nessun cronometro è attivo
             timerEndTime = null;
             alertFired = false;
             timerTimeLeft = defaultRestSeconds;
@@ -1124,9 +1225,12 @@
         // Se torno sulla scheda / riaccendo lo schermo mentre il recupero è attivo, ricalcolo
         // subito il rimanente: se nel frattempo è scaduto, l'alert scatta all'istante.
         document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible' && timerEndTime !== null) {
-                tickTimer();
-            }
+            if (document.visibilityState !== 'visible') return;
+            if (timerEndTime !== null) tickTimer();
+            // Il Wake Lock viene rilasciato dal sistema quando la pagina va in background: al ritorno
+            // in primo piano riacquisiscilo se un consumer è ancora attivo — timer di recupero O un
+            // cronometro esercizi-a-tempo (v1.8.0). updateWakeLock() decide in base allo stato.
+            updateWakeLock();
         });
 
         // Chiede (una sola volta) il permesso per le notifiche di sistema. DEVE partire da un
@@ -1285,6 +1389,7 @@
                 autoStartRestTimer();
             }
 
+			persistSessionState(); // rispecchia su disco: sopravvive allo scarto della scheda (fix #2)
 			renderCurrentSets();
 			updateSetCounter();
 		}
@@ -1350,6 +1455,7 @@
                 } else if (editingSetIndex > index) {
                     editingSetIndex--;
                 }
+                persistSessionState(); // aggiorna il backup su disco (o lo rimuove se resta vuoto)
                 renderCurrentSets();
                 updateSetCounter();
             }
@@ -1519,6 +1625,7 @@
 
 			db.last_day_index = parseInt(dayIdx, 10);
 			saveData();
+			clearSessionState(); // sessione confluita nello storico: rimuovi il backup su disco (fix #2)
 			currentSessionSets = [];
             editingSetIndex = null;
 			renderCurrentSets();
@@ -1584,6 +1691,7 @@
 				db.history = [];
 				db.last_day_index = -1;
 				db.cursor = null; // nuovo ciclo → riparte da Settimana 1 · Giorno 1 · Esercizio 1
+				clearSessionState(); pendingSessionRestore = null; // scarta la sessione in corso (fix #2)
 				saveData();
 				alert(`Programma "${targetArc.name}" caricato!`);
 				switchTab('workout');
@@ -1604,6 +1712,7 @@
 				db.history = [];
 				db.last_day_index = -1;
 				db.cursor = null;
+				clearSessionState(); pendingSessionRestore = null; // scarta la sessione in corso (fix #2)
 				saveData();
 				switchTab('plan');
 			}
@@ -2352,6 +2461,7 @@
 							db.cursor = importedDb.cursor || null;
 
 							saveData();
+							clearSessionState(); // scarta una sessione del vecchio piano prima del reload (fix #2)
 							alert("Importazione completata con successo!");
 							location.reload();
 						}
@@ -2377,7 +2487,8 @@
 
 		function fullAppReset() {
 			if(confirm("💥 Cancellare tutto DEFINITIVAMENTE? Perderai schede attive, archivio e grafici.")) {
-				localStorage.clear();
+				localStorage.clear(); // rimuove anche gym_session
+				pendingSessionRestore = null; // niente ripristino di una sessione del vecchio piano (fix #2)
 				db = { history: [], last_day_index: -1, planType: "brunaccioni", customWeeks: 4, plan: JSON.parse(JSON.stringify(initialPlan)), archives: [], cursor: null };
 				saveData();
 				switchTab('workout');
