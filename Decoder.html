@@ -1,6 +1,7 @@
 <!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <body style="background:#111;color:#eee;font-family:sans-serif;padding:8px">
-<h3>GymProgress Decoder v7</h3>
+<h3>GymProgress Decoder v8</h3>
+<div id=mapst style="font-size:13px;font-weight:bold;padding:6px 8px;border-radius:6px;margin:6px 0"></div>
 <p>Scatta le foto dei QR con la <b>fotocamera del telefono</b>, poi qui premi
 "Scegli file" e <b>seleziona piu foto dalla galleria</b>. Ti dico foto per foto se sono OK,
 con <b>avanzamento live</b> (X/Y foto) mentre elaboro. Il set include un <b>QR-mappa</b>
@@ -21,8 +22,15 @@ var F={};try{F=JSON.parse(localStorage.getItem(K)||'{}')}catch(e){F={}}
 // Mappa nomi appresa in una sessione precedente (sovrascrive i default).
 try{var _lm=JSON.parse(localStorage.getItem(KM)||'null');if(_lm)for(var _k in _lm)N[_k]=_lm[_k]}catch(e){}
 function LG(m){document.getElementById('log').textContent+=m+'\n'}
+// Indicatore di stato della MAPPA nomi: verde se appresa (salvata in localStorage), ambra se
+// non ancora caricata (uso i nomi di default -> un file nuovo comparirebbe come 'F6'/'F7').
+function MS(){var e=document.getElementById('mapst');if(!e)return;var lm=null;try{lm=JSON.parse(localStorage.getItem(KM)||'null')}catch(x){}
+  if(lm){var ids=Object.keys(lm).sort(function(a,b){return a-b});e.style.background='#0a3';e.style.color='#fff';
+    e.textContent='[MAPPA OK] nomi file caricati ('+ids.length+'): '+ids.map(function(k){return k+'='+lm[k]}).join(', ')}
+  else{e.style.background='#b45309';e.style.color='#fff';
+    e.textContent='[MAPPA NON caricata] uso i nomi di default - scansiona il QR-MAPPA (F0) per primo, o un file nuovo comparira come F6/F7'}}
 function SV(){try{localStorage.setItem(K,JSON.stringify(F))}catch(e){LG('save fail '+e)}}
-function AZ(){if(confirm('Azzerare tutti i QR letti?')){F={};localStorage.removeItem(K);localStorage.removeItem(KM);R();document.getElementById('res').textContent=''}}
+function AZ(){if(confirm('Azzerare tutti i QR letti?')){F={};localStorage.removeItem(K);localStorage.removeItem(KM);for(var k in N)delete N[k];N[1]='index.html';N[2]='sw.js';N[3]='manifest.json';N[4]='README.md';N[5]='Decoder.html';R();MS();document.getElementById('res').textContent=''}}
 LG('BarcodeDetector: '+('BarcodeDetector' in window?'si':'no (uso jsQR)'));
 function d45(s){var o=[],i;for(i=0;i<s.length;i+=3){var c=s.substr(i,3);if(c.length==3){var n=B.indexOf(c[0])+B.indexOf(c[1])*45+B.indexOf(c[2])*2025;o.push(n>>8,n&255)}else if(c.length==2){o.push(B.indexOf(c[0])+B.indexOf(c[1])*45)}}return new Uint8Array(o)}
 // Ritorna: {ok:'testo'} letto | {map:n} appresi n nomi | {boot:true} QR bootstrap decoder | null sconosciuto.
@@ -31,7 +39,7 @@ function add(t){
   if(m){
     var f=+m[1];
     if(f===0){ // QR-MAPPA: payload = base45(JSON {id:nome}). Aggiorna N e lo salva.
-      try{var js=new TextDecoder().decode(d45(m[4]));var mp=JSON.parse(js);var c=0;for(var k in mp){N[k]=mp[k];c++}localStorage.setItem(KM,JSON.stringify(mp));return {map:c}}catch(e){return null}
+      try{var js=new TextDecoder().decode(d45(m[4]));var mp=JSON.parse(js);var c=0;for(var k in mp){N[k]=mp[k];c++}localStorage.setItem(KM,JSON.stringify(mp));MS();return {map:c}}catch(e){return null}
     }
     (F[f]=F[f]||{n:+m[3],p:{}}).p[+m[2]]=m[4];SV();
     return {ok:(N[f]||('F'+f))+' '+m[2]+'/'+m[3]};
@@ -72,5 +80,5 @@ async function p(files){
  R();navigator.vibrate&&navigator.vibrate(40);
 }
 document.getElementById('inp').addEventListener('change',function(e){var fs=[].slice.call(e.target.files);p(fs).then(function(){e.target.value=''})});
-R();
+R();MS();
 </script>
