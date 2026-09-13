@@ -19,6 +19,9 @@
     <style>
         .tab-content { display: none; }
         .tab-content.active { display: block; }
+        /* Dettaglio richiudibile del target (v1.10.0): via il triangolo nativo, il chevron è nel markup. */
+        summary { list-style: none; cursor: pointer; }
+        summary::-webkit-details-marker { display: none; }
     </style>
 </head>
 <body class="bg-gray-900 text-white font-sans antialiased pb-24">
@@ -217,6 +220,50 @@
                             </div>
                         </div>
 
+                        <!-- INTENSITÀ PERCEPITA (RIR) — v1.10.0.
+                             Fino alla 1.9.2 non c'era alcun controllo: la classe era DEDOTTA dal tipo di
+                             progressione, tutto ciò che non era "Brunaccioni (Esercizio Target)" diventava
+                             isolamento, e la riga isolamento della RIR_TABLE vale 0 per sei settimane su
+                             sette ⇒ "a cedimento" stampato su mezza scheda. -->
+                        <div class="bg-gray-900/60 p-3 rounded-lg border border-gray-700 space-y-2">
+                            <h4 class="text-xs font-bold text-indigo-400 flex items-center gap-1">🎯 Quanto vicino al cedimento (RIR)</h4>
+                            <p class="text-[10px] text-gray-400 leading-snug">
+                                <strong class="text-gray-300">RIR</strong> = ripetizioni che ti <strong class="text-gray-300">restano</strong> quando chiudi la serie.
+                                <span class="text-gray-500">RIR 2 = ti fermi con 2 in riserva · RIR 0 = a cedimento.</span>
+                            </p>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div id="exclass-container">
+                                    <label for="plan-exclass" class="block text-[10px] text-gray-400 mb-1">Che tipo di esercizio è</label>
+                                    <select id="plan-exclass" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-xs" onchange="syncIntensityFields()">
+                                        <option value="">— non dichiarato —</option>
+                                        <option value="fondamentale">Fondamentale — mai a cedimento</option>
+                                        <option value="complementare">Complementare — buffer 1-2</option>
+                                        <option value="isolamento">Isolamento — a cedimento</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="plan-rir-mode" class="block text-[10px] text-gray-400 mb-1">Che RIR mostrare nel Workout</label>
+                                    <select id="plan-rir-mode" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-xs" onchange="syncIntensityFields()">
+                                        <option value="auto">Automatico (protocollo)</option>
+                                        <option value="fixed">RIR fisso (scelgo io)</option>
+                                        <option value="none">Nessuna indicazione</option>
+                                    </select>
+                                </div>
+                                <div id="rir-fixed-container" class="hidden col-span-2">
+                                    <label for="plan-rir-fixed" class="block text-[10px] text-gray-400 mb-1">RIR da mostrare in tutte le settimane</label>
+                                    <select id="plan-rir-fixed" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-xs">
+                                        <option value="0">0 — a cedimento</option>
+                                        <option value="1">RIR 1</option>
+                                        <option value="2" selected>RIR 2</option>
+                                        <option value="3">RIR 3</option>
+                                        <option value="4">RIR 4</option>
+                                        <option value="5">RIR 5</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <p id="rir-hint" class="text-[10px] text-gray-500 italic leading-snug"></p>
+                        </div>
+
                         <div id="weekly-table-container" class="hidden bg-gray-900/60 p-3.5 rounded-lg border border-gray-700 space-y-2.5 col-span-2">
                             <div class="flex justify-between items-center mb-1">
                                 <h4 class="text-xs font-bold text-indigo-400 flex items-center gap-1">✍️ Target per Settimana</h4>
@@ -352,7 +399,7 @@
 
     <script>
         // Parametro Globale Unico di Versione dell'Applicazione
-        const APP_VERSION = '1.9.2';
+        const APP_VERSION = '1.10.0';
 
 		// Database pre-caricato completo
 		const initialPlan = {
@@ -679,30 +726,87 @@
 			return Math.max(1, Math.round(30 * (b - 1) + b * Math.max(1, (ex.reps || 1) - 1)));
 		}
 
-		// Classe dell'esercizio → determina la progressione di RIR (intensità percepita).
-		// Retrocompat: `exClass` è OPZIONALE e va scritto solo se diverso dal default (stessa
-		// regola di `measure`, v1.6.0). Assente ⇒ dedotto dalla progressione, così i dati e i
-		// backup pre-1.9.0 restano validi senza migrazione.
+		// Classe dell'esercizio → determina la riga di RIR (intensità percepita) usata in automatico.
+		// Retrocompat: `exClass` è OPZIONALE. Assente ⇒ dedotto, così i dati e i backup pre-1.9.0
+		// restano validi senza migrazione.
+		//
+		// ⚠️ v1.10.0 — DUE difetti sanati qui:
+		//  1. Il campo non era scritto da NESSUN punto del codice (nessun controllo nel form, assente
+		//     da `exerciseData`): la classe era sempre quella dedotta e la riga `fondamentale` era
+		//     irraggiungibile, cioè codice morto. Ora si sceglie nel form (select `plan-exclass`,
+		//     "" = auto). Un valore esplicito è volutamente CONSERVATO anche quando coincide col
+		//     dedotto: il pin dell'utente deve sopravvivere a un cambio del tipo di progressione.
+		//  2. La deduzione "non-target ⇒ isolamento" era un'INFERENZA SBAGLIATA. Nel form "Statica /
+		//     Isolamento (Fisso)" significa *nessuna progressione di carico*, che non implica
+		//     "esercizio di isolamento da portare a cedimento su tutte le serie". Risultato: metà
+		//     scheda (croci, french press, alzate, curl… e qualunque plank o esercizio a corpo libero)
+		//     riportava "a cedimento" in S1-S6. Ora la deduzione ritorna `null` = CLASSE SCONOSCIUTA
+		//     ⇒ nessun RIR mostrato finché non lo si dichiara. L'app non inventa una prescrizione che
+		//     non può dedurre dai dati che ha.
 		function exClass(ex) {
 			if (ex.exClass === 'fondamentale' || ex.exClass === 'complementare' || ex.exClass === 'isolamento') return ex.exClass;
-			return ex.progression === 'brunaccioni' ? 'complementare' : 'isolamento';
+			return ex.progression === 'brunaccioni' ? 'complementare' : null;
 		}
 
 		// RIR (ripetizioni in riserva) per settimana, differenziato per classe di esercizio.
 		// Fonte: §4.1 p.30 — fondamentali pesanti SEMPRE a buffer, mai a cedimento (sporcherebbe la
-		// tecnica e affaticherebbe il sistema nervoso); §4.2 p.31 — complementari: buffer 1/2 sulla
-		// prima serie, così si arriva naturalmente a cedimento nell'ultima; §4.3 p.32 — isolamento:
-		// cedimento su tutte le serie (è la loro UNICA via di progressione, vedi §5.5 p.40).
-		// L'ultimo valore di ogni riga è la settimana di scarico.
+		// tecnica e porterebbe forte fatica articolare e neurale: "basterà l'alta quantità di carico a
+		// dare uno stimolo allenante indipendentemente dal cedimento"); §4.2 p.31 — complementari
+		// importanti: buffer 1/2 sulla prima serie, così si arriva naturalmente a cedimento
+		// nell'ultima; §4.3 p.32 — complementari semplici e isolamento: cedimento su tutte le serie.
+		// L'ultimo valore di ogni riga è la settimana di scarico (RIR più alto = stimolo ridotto).
+		//
+		// ⚠️ v1.10.0 — la riga `isolamento` era `[0,0,0,0,0,0,2]`, cedimento COSTANTE. Non contraddice
+		// §4.3, ma lascia quegli esercizi **senza alcun asse di progressione**: non progrediscono di
+		// carico né di volume (ritorno anticipato in `getCalculatedTarget`, p.21) e con un RIR fisso
+		// restano identici dalla S1 alla S6. §5.5 p.40 riempie esattamente quel vuoto — la
+		// "progressione di intensità percepita" è `buffer 2 → 1 → 0` a carico e ripetizioni costanti,
+		// ed è lo strumento indicato proprio per gli esercizi in cui non si può salire di carico
+		// (p.29 punto 4). Portata quindi a `[2,1,0,2,1,0,3]`: la rampa 2→1→0 di §5.5 dentro **ciascun**
+		// blocco (come le serie, che riaccumulano), il cedimento a fine blocco come vuole §4.3.
+		// Differenza con `complementare`: l'isolamento arriva a cedimento alla fine di **entrambi** i
+		// blocchi, il complementare solo alla fine di quello di intensità.
 		const RIR_TABLE = {
 			fondamentale:  [3, 3, 2, 2, 2, 1, 4],
 			complementare: [2, 2, 1, 2, 1, 0, 3],
-			isolamento:    [0, 0, 0, 0, 0, 0, 2]
+			isolamento:    [2, 1, 0, 2, 1, 0, 3]
 		};
+		const RIR_MAX = 5;   // limite del select "RIR fisso": oltre non ha significato pratico
+
+		// Il RIR da mostrare per (esercizio, settimana). UNICO punto di decisione: qui convergono la
+		// scelta dell'utente (`rirMode`, v1.10.0) e la tabella del protocollo. Ritorna `null` quando non
+		// va mostrato niente (`rirLabel(null)` ⇒ stringa vuota ⇒ nessun testo nel target).
+		//   'none'         → mai mostrato.
+		//   'fixed'        → il valore scelto a mano (0 = "a cedimento"). Vale in QUALSIASI tipo di
+		//                    piano, personalizzato compreso: è una prescrizione dell'utente, non del
+		//                    protocollo, quindi non dipende dalle 7 settimane.
+		//   assente/'auto' → tabella per classe, ma SOLO se tutte e tre le condizioni valgono:
+		//                    (a) piano Brunaccioni — le 7 settimane della tabella sono sue, in un piano
+		//                        personalizzato la riga non è tarata su nulla;
+		//                    (b) esercizio a ripetizioni — un "RIR 2" su una tenuta isometrica non
+		//                        significa nulla, e "a cedimento" contraddirebbe il target del
+		//                        cronometro (che suona proprio ai secondi previsti);
+		//                    (c) classe NOTA (vedi `exClass`): dichiarata o dedotta da
+		//                        progression === 'brunaccioni'. Altrimenti l'app tace.
 		function rirFor(ex, week) {
-			const row = RIR_TABLE[exClass(ex)] || RIR_TABLE.complementare;
+			if (ex.rirMode === 'none') return null;
+			if (ex.rirMode === 'fixed') {
+				const v = parseInt(ex.rirFixed, 10);
+				return Number.isFinite(v) ? Math.min(Math.max(v, 0), RIR_MAX) : null;
+			}
+			if (db.planType !== 'brunaccioni' || isTimed(ex)) return null;
+			const row = RIR_TABLE[exClass(ex)];
+			if (!row) return null;
 			const w = Math.min(Math.max(1, parseInt(week, 10) || 1), BRUNACCIONI_WEEKS);
 			return row[w - 1];
+		}
+
+		// Etichetta compatta dell'impostazione di intensità, per la lista della scheda. Mostrata SOLO
+		// quando l'utente ha dichiarato qualcosa: altrimenti sarebbe rumore su ogni riga.
+		function rirTag(ex) {
+			if (ex.rirMode === 'none') return ' · senza RIR';
+			if (ex.rirMode === 'fixed') return ` · ${rirLabel(rirFor(ex, 1))}`;
+			return ex.exClass ? ` · ${ex.exClass}` : '';
 		}
 		function rirLabel(rir) {
 			if (rir === null || rir === undefined) return '';
@@ -764,15 +868,16 @@
 			} else if (ex.progression === "custom_table") {
 				if (ex.weeklyTargets && ex.weeklyTargets[w - 1]) {
 					const target = ex.weeklyTargets[w - 1];
-					return { sets: target.sets, reps: target.reps, weight: target.weight, label: `Prog. Pers. Sett. ${w}`, rir: null, approx: false };
+					return { sets: target.sets, reps: target.reps, weight: target.weight, label: `Prog. Pers. Sett. ${w}`, rir: rirFor(ex, week), approx: false };
 				}
 				label = "Prog. Pers. (Vuoto)";
 			} else if (ex.progression === "libera") {
 				label = "Gestione Libera";
 			}
-			// La Progressione Personalizzata non porta RIR: la tabella RIR_TABLE è tarata sulle 7
-			// settimane del protocollo Brunaccioni. `rir: null` ⇒ non viene mostrato nulla.
-			return { sets, reps, weight, label, rir: null, approx: false };
+			// La Progressione Personalizzata non porta la tabella automatica (RIR_TABLE è tarata sulle 7
+			// settimane del protocollo Brunaccioni), ma dalla v1.10.0 porta il RIR **fisso** se l'utente
+			// l'ha impostato: `rirFor` ritorna null in modalità automatica e il valore scelto in 'fixed'.
+			return { sets, reps, weight, label, rir: rirFor(ex, week), approx: false };
 		}
 
 		function generateWeeksDropdown() {
@@ -1076,12 +1181,14 @@
 						</div>
 						<p id="target-text" class="text-lg font-bold text-indigo-200">${target.sets} serie x ${target.reps} ${measureUnit(ex)} @ ${target.approx ? '≈ ' : ''}${target.weight} kg${rirLabel(target.rir) ? ` · ${rirLabel(target.rir)}` : ''}</p>
 						${target.approx ? `
-						<div class="mt-1.5 text-[11px] leading-relaxed bg-gray-900/50 rounded-lg p-2 border border-gray-700">
-							<p class="text-gray-400">≈ stima al +5%: carica il peso disponibile più vicino e registra quello che hai usato.</p>
-							${target.deload ? '' : `
-							<p class="text-gray-300 mt-1">Se il salto di carico non è caricabile o non riesce, questa alternativa vale <strong>lo stesso sforzo</strong>:</p>
-							<p class="text-emerald-300 font-semibold">↔ ${target.sets} serie x ${isoeffortAltReps(ex)} ${measureUnit(ex)} @ ${ex.weight} kg <span class="text-gray-500 font-normal">(peso di sempre, una rep in più)</span></p>`}
-						</div>` : ''}
+						<details class="mt-1">
+							<summary class="text-[11px] text-gray-400">≈ stima al +5%${target.deload ? '' : ` · alt. ${isoeffortAltReps(ex)} ${measureUnit(ex)} @ ${ex.weight} kg`} <span class="text-indigo-400 font-bold">ⓘ</span></summary>
+							<div class="mt-1.5 text-[11px] leading-relaxed bg-gray-900/50 rounded-lg p-2 border border-gray-700 space-y-1">
+								<p class="text-gray-400">Carica il peso disponibile più vicino e registra quello che hai davvero usato: il consolidamento di fine ciclo riparte da lì.</p>
+								${target.deload ? '' : `
+								<p class="text-gray-300">Se il salto non è caricabile o non riesce, <strong class="text-emerald-300">${target.sets} serie x ${isoeffortAltReps(ex)} ${measureUnit(ex)} @ ${ex.weight} kg</strong> valgono lo stesso sforzo (peso di sempre, una rep in più).</p>`}
+							</div>
+						</details>` : ''}
 						<p id="target-note" class="text-xs text-amber-400 mt-1.5 italic ${ex.note ? '' : 'hidden'}">${ex.note ? '📝 Nota: ' + esc(ex.note) : ''}</p>
 					</div>
 				`;
@@ -2042,6 +2149,7 @@
 			else container?.classList.add('hidden');
 			populateProgressionDropdownOptions();
 			populateSuperSetSelect();
+			syncIntensityFields();   // la classe si applica solo al piano Brunaccioni (v1.10.0)
 		}
 
 		function changeGlobalPlanType() {
@@ -2126,6 +2234,51 @@
 					}
 					generateWeeklyInputRows(existingTargets);
 				}
+			}
+			syncIntensityFields();   // la classe DEDOTTA dipende dalla progressione → aggiorna l'aiuto
+		}
+
+		// Visibilità e testo d'aiuto dei campi "Intensità percepita" (v1.10.0). Va richiamata a ogni
+		// cambio che ne altera il significato: tipo di piano, tipo di progressione, misura (reps/tempo),
+		// modalità RIR, classe. Nasconde ciò che non si applica invece di lasciare UI morta:
+		//  - la CLASSE serve solo alla tabella automatica ⇒ sparisce fuori dal piano Brunaccioni e in
+		//    modalità 'fixed'/'none';
+		//  - il select del RIR fisso appare solo in modalità 'fixed'.
+		function syncIntensityFields() {
+			const modeSel = document.getElementById('plan-rir-mode');
+			if (!modeSel) return;
+			const mode = modeSel.value;
+			const isBrun = db.planType === 'brunaccioni';
+			const timed = (document.getElementById('plan-measure')?.value === 'time');
+			const progMode = document.getElementById('plan-progression')?.value;
+			const exclassBox = document.getElementById('exclass-container');
+			const fixedBox = document.getElementById('rir-fixed-container');
+			const hint = document.getElementById('rir-hint');
+			// La classe alimenta SOLO la tabella automatica: sparisce dove quella non si applica
+			// (piano personalizzato, modalità fixed/none, esercizio a tempo) per non lasciare un
+			// controllo che non produce alcun effetto.
+			if (exclassBox) exclassBox.classList.toggle('hidden', !isBrun || mode !== 'auto' || timed);
+			if (fixedBox) fixedBox.classList.toggle('hidden', mode !== 'fixed');
+			if (!hint) return;
+
+			if (mode === 'none') {
+				hint.innerText = "Il target nel Workout non riporterà alcuna indicazione di intensità.";
+			} else if (mode === 'fixed') {
+				hint.innerText = "Lo stesso RIR in tutte le settimane, indipendente dal protocollo. 0 = a cedimento.";
+			} else if (!isBrun) {
+				hint.innerText = "La tabella automatica è tarata sulle settimane del protocollo Brunaccioni: in un piano personalizzato non viene mostrato alcun RIR. Per prescriverlo usa \"RIR fisso\".";
+			} else if (timed) {
+				hint.innerText = "Su un esercizio a tempo la tabella automatica non si applica (un RIR su una tenuta isometrica non significa nulla): usa \"RIR fisso\" — 0 = tieni fino al cedimento.";
+			} else {
+				// La riga di RIR è SEMPRE letta da RIR_TABLE, mai riscritta a mano nel testo: un
+				// letterale qui divergerebbe in silenzio da un ritocco della tabella (regola #13).
+				const fmtRow = (r) => r.map(v => v === 0 ? 'ced.' : v).join(' · ');
+				const row = RIR_TABLE[document.getElementById('plan-exclass')?.value];
+				hint.innerText = row
+					? `RIR per settimana: ${fmtRow(row)}`
+					: (progMode === 'brunaccioni'
+						? `Classe dedotta: complementare (esercizio target). RIR per settimana: ${fmtRow(RIR_TABLE.complementare)}`
+						: "Nessun RIR verrà mostrato nel Workout: dichiara qui sopra che tipo di esercizio è (oppure passa a \"RIR fisso\") per averne uno.");
 			}
 		}
 
@@ -2222,6 +2375,7 @@
 			if (repsLabel) repsLabel.innerText = isTime ? 'Sec Base' : 'Rep Base';
 			const repsInput = document.getElementById('plan-reps');
 			if (repsInput) repsInput.title = isTime ? 'Durata target in secondi' : 'Ripetizioni base';
+			syncIntensityFields();   // su un esercizio a tempo la tabella automatica non si applica
 		}
 
 		// Aggiunge una riga vuota alla bozza degli item del circuito e ri-renderizza.
@@ -2339,6 +2493,10 @@
 			const step = parseFloat(document.getElementById('plan-step').value) || 2.5;
 			const note = document.getElementById('plan-note').value.trim();
 			const superSetWith = document.getElementById('plan-superset-select').value; // ora è un id (o "")
+			// Intensità percepita (v1.10.0). "" = classe automatica; 'auto' = tabella del protocollo.
+			const exClassSel = document.getElementById('plan-exclass').value;
+			const rirModeSel = document.getElementById('plan-rir-mode').value;
+			const rirFixedSel = parseInt(document.getElementById('plan-rir-fixed').value, 10);
 
 			if(isNaN(dayIdx) || !name) return alert("Compila il nome dell'esercizio.");
 
@@ -2367,6 +2525,18 @@
 			// `measure` scritto solo se 'time' (retrocompat: assente = reps → non altera dati esistenti).
 			const exerciseData = { id: exId, name, sets, reps, weight, restSeconds, progression, step, note, weeklyTargets, superSetWith: "" };
 			if (measure === 'time') exerciseData.measure = 'time';
+			// `exClass`/`rirMode`/`rirFixed` scritti SOLO se diversi dal default, come `measure` (regola
+			// #9): un esercizio lasciato in automatico non porta i campi e i backup pre-1.10.0 restano
+			// validi senza migrazione.
+			if (exClassSel === 'fondamentale' || exClassSel === 'complementare' || exClassSel === 'isolamento') {
+				exerciseData.exClass = exClassSel;
+			}
+			if (rirModeSel === 'none') {
+				exerciseData.rirMode = 'none';
+			} else if (rirModeSel === 'fixed') {
+				exerciseData.rirMode = 'fixed';
+				exerciseData.rirFixed = Number.isFinite(rirFixedSel) ? Math.min(Math.max(rirFixedSel, 0), RIR_MAX) : 0;
+			}
 
 			if (isEdit) {
 				if (currentEditState.dayIdx !== dayIdx) {
@@ -2496,7 +2666,15 @@
 			document.getElementById('plan-progression').value = ex.progression;
 			document.getElementById('plan-step').value = ex.step !== undefined ? ex.step : 2.5;
 			document.getElementById('plan-note').value = ex.note || '';
-			
+			// Intensità percepita (v1.10.0): campi assenti ⇒ automatico. Il valore fisso è riportato nel
+			// range del select (un backup manomesso con rirFixed: 9 lascerebbe altrimenti il select vuoto).
+			document.getElementById('plan-exclass').value = ex.exClass || '';
+			document.getElementById('plan-rir-mode').value = (ex.rirMode === 'fixed' || ex.rirMode === 'none') ? ex.rirMode : 'auto';
+			document.getElementById('plan-rir-fixed').value = ex.rirFixed !== undefined
+				? String(Math.min(Math.max(parseInt(ex.rirFixed, 10) || 0, 0), RIR_MAX))
+				: '2';
+			syncIntensityFields();
+
 			populateSuperSetSelect();
 			document.getElementById('plan-superset-select').value = ex.superSetWith || "";
 			
@@ -2532,6 +2710,10 @@
 			document.getElementById('btn-save-exercise').innerText = "Salva Esercizio";
 			document.getElementById('btn-cancel-edit').classList.add('hidden');
 			document.getElementById('plan-progression').value = db.planType === 'brunaccioni' ? 'brunaccioni' : 'statico';
+			// Intensità percepita: si riparte da "automatico" (nessun campo scritto sull'esercizio).
+			const exClassSel = document.getElementById('plan-exclass'); if (exClassSel) exClassSel.value = '';
+			const rirModeSel = document.getElementById('plan-rir-mode'); if (rirModeSel) rirModeSel.value = 'auto';
+			const rirFixedSel = document.getElementById('plan-rir-fixed'); if (rirFixedSel) rirFixedSel.value = '2';
 			toggleStepInputVisibility();
 			populateSuperSetSelect();
 		}
@@ -2614,7 +2796,7 @@
 										</ol>
 									</div>`
 								: `<div class="flex justify-between text-gray-400 mt-1.5 text-[11px]">
-										<span>Base: ${ex.sets}x${ex.reps} ${measureUnit(ex)}${(ex.weight > 0) ? ` @ ${ex.weight}kg` : ''} | ⏱️ ${ex.restSeconds || 90}s${isTimed(ex) ? ' · a tempo' : ''}</span>
+										<span>Base: ${ex.sets}x${ex.reps} ${measureUnit(ex)}${(ex.weight > 0) ? ` @ ${ex.weight}kg` : ''} | ⏱️ ${ex.restSeconds || 90}s${isTimed(ex) ? ' · a tempo' : ''}${rirTag(ex)}</span>
 										<span class="text-indigo-400 font-bold uppercase text-[9px]">
 											${ex.progression === 'custom_table' ? 'Tabella Settimanale' : ex.progression}
 										</span>
