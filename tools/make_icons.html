@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GymProgress — generatore icone PWA</title>
+<style>
+	body { font-family: system-ui, sans-serif; background: #111827; color: #e5e7eb; margin: 0; padding: 16px; }
+	h1 { font-size: 18px; margin: 0 0 8px; }
+	p { font-size: 13px; color: #9ca3af; line-height: 1.5; }
+	.row { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0; }
+	.card { background: #1f2937; border-radius: 10px; padding: 10px; text-align: center; font-size: 12px; }
+	.card canvas { display: block; margin: 0 auto 6px; background: repeating-conic-gradient(#374151 0 25%, #4b5563 0 50%) 0 0 / 16px 16px; }
+	a.dl { display: inline-block; background: #4f46e5; color: #fff; padding: 8px 12px; border-radius: 8px; text-decoration: none; font-size: 13px; margin: 4px 6px 4px 0; }
+	label { font-size: 13px; }
+	input[type=number] { width: 70px; }
+</style>
+</head>
+<body>
+<h1>💪 Generatore icone PWA (GymProgress Pro)</h1>
+<p>
+	Produce <strong>icon-192.png</strong> (192×192, <code>purpose: any</code>) e <strong>icon-maskable-512.png</strong>
+	(512×512, <code>purpose: maskable</code>) a partire da <code>icon.png</code>. Le icone sono binarie e non viaggiano
+	col trasferimento QR: si rigenerano da qui, con lo stesso risultato su qualunque browser.
+	Servita da un web server accanto a <code>gymprogress-app/</code> carica l'icona da sola; aperta come file, sceglila qui sotto.
+</p>
+<p>
+	<label>icon.png: <input type="file" id="file" accept="image/png,image/*"></label>
+	&nbsp; <label>Scala del disegno nella maskable: <input type="number" id="scale" min="0.4" max="0.9" step="0.01" value="0.64"></label>
+	<button id="regen">Rigenera</button>
+</p>
+<div class="row" id="previews"></div>
+<div id="downloads"></div>
+
+<script>
+	// Lato del canvas di lavoro e della maskable. La zona sicura delle maskable è un cerchio di
+	// raggio pari al 40% del lato (web.dev/articles/maskable-icon): fuori da lì il sistema può tagliare.
+	const N = 512;
+	const SAFE_R = 0.4 * N;
+
+	// 1. Rende l'icona "a filo": gli angoli trasparenti attorno allo squircle disegnato vengono
+	// riempiti prolungando il colore più vicino (riempimento per anelli successivi), così il
+	// gradiente di sfondo arriva fino agli spigoli. Lo squircle di icon.png ha un bordo chiaro
+	// antialiasato di 2-3 px: se fosse sorgente del riempimento verrebbe trascinato verso
+	// l'esterno (contorno visibile attorno al disegno + striature). Per questo la maschera opaca
+	// viene prima ERODA di `erode` px e il bordo è rifatto col riempimento come il resto.
+	function fullBleed(img, erode = 4) {
+		const c = document.createElement('canvas');
+		c.width = c.height = N;
+		const g = c.getContext('2d');
+		g.imageSmoothingQuality = 'high';
+		g.drawImage(img, 0, 0, N, N);
+		const d = g.getImageData(0, 0, N, N);
+		const p = d.data;
+		let filled = new Uint8Array(N * N);
+		for (let i = 0; i < N * N; i++) filled[i] = p[i * 4 + 3] >= 250 ? 1 : 0;
+		for (let it = 0; it < erode; it++) {
+			const prev = filled.slice();
+			for (let i = 0; i < N * N; i++) {
+				if (!prev[i]) continue;
+				const x = i % N, y = (i / N) | 0;
+				if (x === 0 || y === 0 || x === N - 1 || y === N - 1
+					|| !prev[i - 1] || !prev[i + 1] || !prev[i - N] || !prev[i + N]) filled[i] = 0;
+			}
+		}
+		const col = new Float32Array(N * N * 3);
+		for (let i = 0; i < N * N; i++) {
+			if (filled[i]) { col[i * 3] = p[i * 4]; col[i * 3 + 1] = p[i * 4 + 1]; col[i * 3 + 2] = p[i * 4 + 2]; }
+		}
+		const sourceMask = filled.slice();
+		let frontier = [];
+		for (let i = 0; i < N * N; i++) if (!filled[i] && hasFilledNeighbor(i)) frontier.push(i);
+		function hasFilledNeighbor(i) {
+			const x = i % N, y = (i / N) | 0;
+			for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+				const xx = x + dx, yy = y + dy;
+				if ((dx || dy) && xx >= 0 && yy >= 0 && xx < N && yy < N && filled[yy * N + xx] === 1) return true;
+			}
+			return false;
+		}
+		while (frontier.length) {
+			const values = frontier.map(i => {
+				const x = i % N, y = (i / N) | 0;
+				let r = 0, gg = 0, b = 0, n = 0;
+				for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+					const xx = x + dx, yy = y + dy;
+					if ((dx || dy) && xx >= 0 && yy >= 0 && xx < N && yy < N && filled[yy * N + xx] === 1) {
+						const j = yy * N + xx;
+						r += col[j * 3]; gg += col[j * 3 + 1]; b += col[j * 3 + 2]; n++;
+					}
+				}
+				return [r / n, gg / n, b / n];
+			});
+			// I valori del giro sono calcolati tutti PRIMA di marcarli: un pixel riempito in questo
+			// giro diventa sorgente solo dal giro dopo (niente deriva verso un lato).
+			frontier.forEach((i, k) => {
+				col[i * 3] = values[k][0]; col[i * 3 + 1] = values[k][1]; col[i * 3 + 2] = values[k][2];
+				filled[i] = 1;
+			});
+			const next = new Set();
+			frontier.forEach(i => {
+				const x = i % N, y = (i / N) | 0;
+				for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+					const xx = x + dx, yy = y + dy;
+					if (xx >= 0 && yy >= 0 && xx < N && yy < N && !filled[yy * N + xx]) next.add(yy * N + xx);
+				}
+			});
+			frontier = [...next];
+		}
+		// Tutto ciò che non era sorgente (angoli, bordo antialiasato, fascia erosa) prende il colore
+		// del riempimento: niente composizione col pixel originale, che riporterebbe il bordo chiaro.
+		for (let i = 0; i < N * N; i++) {
+			if (sourceMask[i]) continue;
+			for (let k = 0; k < 3; k++) p[i * 4 + k] = Math.round(col[i * 3 + k]);
+			p[i * 4 + 3] = 255;
+		}
+		g.putImageData(d, 0, 0);
+		return c;
+	}
+
+	// 2. Colore del bordo in funzione dell'angolo: campionato poco dentro il perimetro dell'icona
+	// a filo, poi smussato (mediana + media circolari) per non trascinare verso l'esterno i
+	// dettagli che toccano il bordo.
+	function borderColorTable(bleed, K = 1440, inset = 6) {
+		const d = bleed.getContext('2d').getImageData(0, 0, N, N).data;
+		const raw = [];
+		for (let k = 0; k < K; k++) {
+			const th = 2 * Math.PI * k / K, cx = Math.cos(th), sy = Math.sin(th);
+			const t = (N / 2 - inset) / Math.max(Math.abs(cx), Math.abs(sy));
+			const x = Math.min(N - 1, Math.max(0, Math.round(N / 2 + t * cx)));
+			const y = Math.min(N - 1, Math.max(0, Math.round(N / 2 + t * sy)));
+			const i = (y * N + x) * 4;
+			raw.push([d[i], d[i + 1], d[i + 2]]);
+		}
+		const circ = (arr, k) => arr[((k % K) + K) % K];
+		const W1 = 32, W2 = 16;   // ±8° di mediana, ±4° di media
+		const med = raw.map((_, k) => [0, 1, 2].map(ch => {
+			const w = [];
+			for (let j = -W1; j <= W1; j++) w.push(circ(raw, k + j)[ch]);
+			w.sort((a, b) => a - b);
+			return w[W1];
+		}));
+		return med.map((_, k) => [0, 1, 2].map(ch => {
+			let s = 0;
+			for (let j = -W2; j <= W2; j++) s += circ(med, k + j)[ch];
+			return s / (2 * W2 + 1);
+		}));
+	}
+
+	// 3. Maskable: disegno a filo rimpicciolito al centro (dentro la zona sicura), e fuori dal
+	// disegno il colore del bordo prolungato lungo i raggi, così lo sfondo è pieno fino ai bordi
+	// e senza cuciture. Banda di sfumatura di `feather` px fra disegno e prolungamento.
+	function makeMaskable(bleed, scale, feather = 10) {
+		const K = 1440;
+		const table = borderColorTable(bleed, K);
+		const S = document.createElement('canvas');
+		S.width = S.height = N;
+		const gs = S.getContext('2d');
+		gs.imageSmoothingQuality = 'high';
+		const M = N * scale, off = (N - M) / 2;
+		gs.drawImage(bleed, off, off, M, M);
+		const sd = gs.getImageData(0, 0, N, N);
+		const p = sd.data;
+		const half = M / 2;
+		for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+			const dx = x + 0.5 - N / 2, dy = y + 0.5 - N / 2;
+			const rInf = Math.max(Math.abs(dx), Math.abs(dy));
+			const b = Math.min(1, Math.max(0, (half - 1 - rInf) / feather));
+			if (b >= 1) continue;
+			let k = Math.round(Math.atan2(dy, dx) / (2 * Math.PI) * K);
+			k = ((k % K) + K) % K;
+			const ring = table[k];
+			const i = (y * N + x) * 4;
+			for (let ch = 0; ch < 3; ch++) p[i + ch] = Math.round(b * p[i + ch] + (1 - b) * ring[ch]);
+			p[i + 3] = 255;
+		}
+		gs.putImageData(sd, 0, 0);
+		return S;
+	}
+
+	function make192(img) {
+		const c = document.createElement('canvas');
+		c.width = c.height = 192;
+		const g = c.getContext('2d');
+		g.imageSmoothingQuality = 'high';
+		g.drawImage(img, 0, 0, 192, 192);
+		return c;
+	}
+
+	// Anteprime con le maschere che un launcher può applicare. La prima mostra in rosso il
+	// cerchio della zona sicura: tutto il disegno deve starci dentro.
+	function preview(src, label, clip, ring) {
+		const S = 160, c = document.createElement('canvas');
+		c.width = c.height = S;
+		const g = c.getContext('2d');
+		g.save();
+		if (clip) { clip(g, S); g.clip(); }
+		g.drawImage(src, 0, 0, S, S);
+		g.restore();
+		if (ring) {
+			g.strokeStyle = '#ef4444'; g.lineWidth = 1.5;
+			g.beginPath(); g.arc(S / 2, S / 2, S * 0.4, 0, 2 * Math.PI); g.stroke();
+		}
+		const card = document.createElement('div');
+		card.className = 'card';
+		card.appendChild(c);
+		card.appendChild(document.createTextNode(label));
+		document.getElementById('previews').appendChild(card);
+	}
+	const circle = r => (g, S) => { g.beginPath(); g.arc(S / 2, S / 2, S * r, 0, 2 * Math.PI); };
+	const rounded = rr => (g, S) => { g.beginPath(); g.roundRect(0, 0, S, S, S * rr); };
+	const squircle = (g, S) => {
+		g.beginPath();
+		for (let k = 0; k <= 360; k++) {
+			const t = k / 360 * 2 * Math.PI, c = Math.cos(t), s = Math.sin(t);
+			const x = S / 2 + S / 2 * Math.sign(c) * Math.pow(Math.abs(c), 0.5);
+			const y = S / 2 + S / 2 * Math.sign(s) * Math.pow(Math.abs(s), 0.5);
+			k ? g.lineTo(x, y) : g.moveTo(x, y);
+		}
+		g.closePath();
+	};
+
+	function download(canvas, name) {
+		canvas.toBlob(blob => {
+			const a = document.createElement('a');
+			a.className = 'dl';
+			a.href = URL.createObjectURL(blob);
+			a.download = name;
+			a.textContent = `⬇️ ${name}`;
+			document.getElementById('downloads').appendChild(a);
+		}, 'image/png');
+	}
+
+	let sourceImg = null;
+	function run() {
+		if (!sourceImg) return;
+		document.getElementById('previews').innerHTML = '';
+		document.getElementById('downloads').innerHTML = '';
+		const scale = parseFloat(document.getElementById('scale').value) || 0.64;
+		const bleed = fullBleed(sourceImg);
+		const maskable = makeMaskable(bleed, scale);
+		const icon192 = make192(sourceImg);
+		preview(maskable, 'maskable · zona sicura', null, true);
+		preview(maskable, 'cerchio', circle(0.5));
+		preview(maskable, 'squircle', squircle);
+		preview(maskable, 'quadrato arrotondato', rounded(0.2));
+		preview(icon192, 'icon-192 (any)', null);
+		download(icon192, 'icon-192.png');
+		download(maskable, 'icon-maskable-512.png');
+		window.gpIcons = { icon192, maskable };   // per chi pilota la pagina da script
+	}
+	function load(src) {
+		const img = new Image();
+		img.onload = () => { sourceImg = img; run(); };
+		img.src = src;
+	}
+	document.getElementById('file').addEventListener('change', e => {
+		const f = e.target.files[0];
+		if (f) load(URL.createObjectURL(f));
+	});
+	document.getElementById('regen').addEventListener('click', run);
+	if (location.protocol.startsWith('http')) load('../gymprogress-app/icon.png');
+</script>
+</body>
+</html>
