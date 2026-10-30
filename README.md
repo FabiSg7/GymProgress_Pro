@@ -62,9 +62,9 @@ Poi apri **http://localhost:8000** nel browser.
 
 ## 🛠️ Stack tecnico
 
-- **Vanilla JavaScript** — nessun framework, nessun passaggio di build.
-- **[Tailwind CSS](https://tailwindcss.com/)** — via CDN, per lo stile.
-- **[Chart.js](https://www.chartjs.org/)** — via CDN, per i grafici del volume.
+- **Vanilla JavaScript** — nessun framework; per usare l'app non serve alcuna build.
+- **[Tailwind CSS](https://tailwindcss.com/)** — **precompilato** in `tailwind.css` (dalla v1.11.0). Chi modifica le classi in `index.html` lo rigenera con il comando indicato in `tools/tailwind.config.js`.
+- **[Chart.js](https://www.chartjs.org/)** — via CDN, per i grafici del volume; caricato solo alla prima apertura di *Analisi* (dalla v1.11.0) e tenuto in cache per l'uso offline.
 - **Service Worker** — strategia *cache-first* con **runtime caching** (le risorse scaricate vengono memorizzate per l'uso offline successivo) e **prompt di aggiornamento** quando è disponibile una nuova versione.
 - **`localStorage`** — persistenza dei dati lato client.
 
@@ -74,11 +74,18 @@ Poi apri **http://localhost:8000** nel browser.
 
 ```
 GymProgress_Pro/
+├── tools/                    # Strumenti di sviluppo (non servono per usare l'app)
+│   ├── tailwind.config.js    # Configurazione e comando per rigenerare tailwind.css
+│   ├── tailwind.input.css
+│   └── make_icons.html       # Genera icon-192.png e icon-maskable-512.png da icon.png
 └── gymprogress-app/
-    ├── index.html      # L'intera applicazione (HTML + CSS + JS inline)
-    ├── manifest.json   # Manifest PWA (nome, icona, tema, orientamento)
-    ├── sw.js           # Service Worker (cache offline)
-    └── icon.png        # Icona dell'app (512×512)
+    ├── index.html            # L'intera applicazione (HTML + JS inline)
+    ├── tailwind.css          # Stile precompilato (generato da tools/)
+    ├── manifest.json         # Manifest PWA (nome, icone, tema, orientamento)
+    ├── sw.js                 # Service Worker (cache offline)
+    ├── icon.png              # Icona dell'app (512×512)
+    ├── icon-192.png          # Icona 192×192 (generata)
+    └── icon-maskable-512.png # Icona adattiva per Android (generata)
 ```
 
 ---
@@ -93,6 +100,22 @@ I dati vivono nel `localStorage` del browser: **cancellare i dati di navigazione
 ---
 
 ## 📝 Changelog
+
+### v1.11.0
+- **Nel *Target Programmato* ora vedi anche il carico che hai usato l'ultima volta.** Se in palestra carichi un peso diverso da quello indicato, lo registri nella serie, ma alla sessione successiva l'app ti mostrava di nuovo solo il target e per ritrovare il peso vero dovevi aprire lo storico. Ora sotto il target compare una riga **`Ultimo carico: 62.5 kg`**, letta dall'ultima volta che hai completato quell'esercizio.
+  - Se nell'ultima sessione tutte le serie avevano lo stesso peso, il valore compare **una volta sola**; se almeno una era diversa, compaiono **tutti i pesi in ordine di serie** (`60 · 62.5 · 62.5 kg`).
+  - La riga è **grigia** quando l'ultimo carico coincide con il target e **ambra** quando è diverso, così lo scostamento si nota subito. Nelle settimane del blocco di intensificazione, dove il target è una stima (`≈`), sarà quasi sempre ambra: è normale, ti ricorda cosa hai caricato davvero.
+  - Vale per l'esercizio singolo, per **entrambi** gli esercizi della super serie e per ogni esercizio del circuito.
+  - Non compare se l'esercizio non ha ancora storico, né sugli esercizi a corpo libero (target e ultimo carico a 0 kg). Su un esercizio a tempo zavorrato, invece, compare.
+- **Il campo "Carico (kg)" parte dal peso che hai usato davvero.** Se l'ultima volta hai caricato 62,5 kg invece dei 60 indicati, la volta dopo trovi già scritto 62,5 e non devi correggerlo a ogni serie (se le serie avevano pesi diversi, quello dell'ultima serie). Vale finché la prescrizione resta la stessa: quando il target cambia (il +5% del blocco di intensificazione, lo scarico, il nuovo ciclo dopo il consolidamento, il +kg settimanale nel piano personalizzato, o perché hai cambiato tu il carico in *Programma*) il campo propone il **nuovo target**, così non registri per sbaglio il peso vecchio nella settimana in cui dovevi salire.
+  - Vale anche nel circuito: se cambi il peso di un esercizio nella scheda, il campo propone il peso nuovo.
+  - Per accorgersene l'app salva, con ogni sessione, il carico che era prescritto quel giorno. Le sessioni registrate con le versioni precedenti non hanno questo dato: per quegli esercizi una modifica fatta a mano alla scheda si vede solo dopo che li hai registrati una volta con questa versione.
+- **Avvio più rapido.** Lo stile dell'app (Tailwind) era generato dal browser **a ogni apertura**, anche offline, e la schermata di avvio restava visibile finché non aveva finito. Ora è un file già pronto e incluso nell'app: niente più compilazione all'avvio, e un download di 28 KB invece di circa 400. Anche la libreria dei grafici (210 KB) non si carica più a ogni apertura ma solo la prima volta che entri in *Analisi*, e funziona anche offline.
+- **Icona più nitida sulla schermata Home (Android).** C'era una sola icona, che Android rimpiccioliva e ritagliava di nuovo, dentro un bordo. Ora ci sono un'icona **adattiva** (*maskable*), con lo sfondo che riempie tutta la forma scelta dal launcher, e una da 192 px. L'icona del launcher e quella della schermata di avvio ora si somigliano, e il "salto" dell'icona all'apertura si riduce. Per vederla subito va **disinstallata e reinstallata** la PWA: Chrome aggiorna da solo l'icona di un'app installata solo dopo ore o giorni.
+- **Barra di stato dello stesso colore dell'header.** Il manifest e la pagina dichiaravano due colori diversi, quindi su Android la barra in alto cambiava colore fra l'avvio e l'app, e ad app aperta restava più scura dell'intestazione, con una linea di stacco. Ora sono uguali (`#1f2937`): barra e intestazione formano un'unica fascia.
+- **Messaggio di fine ciclo corretto.** Al termine dell'ultima settimana l'app diceva sempre *«Mesociclo completato (7 settimane, scarico incluso)! Ora il riepilogo dei carichi»*, anche nel piano personalizzato, dove le settimane sono quelle che hai scelto tu, lo scarico non c'è e il riepilogo non compare. Ora il messaggio riporta il ciclo vero e annuncia il riepilogo dei carichi solo quando compare davvero. Il riepilogo resta riservato al protocollo Brunaccioni.
+- **Il banner "Nuova versione disponibile" entra con una breve animazione**: sale di poco mentre compare, in un quarto di secondo. Se sul telefono hai attivato *Rimuovi animazioni*, compare e basta.
+- Nessuna migrazione dei dati: lo storico e i backup esistenti restano validi così come sono; da questa versione ogni sessione salva in più il carico prescritto.
 
 ### v1.10.0
 - **L'app non ti dice più che quasi tutto va fatto "a cedimento".** Nel *Target Programmato* comparivano le parole **a cedimento** su ogni esercizio che non fosse un target del protocollo: croci, french press, alzate laterali, curl, plank, esercizi a corpo libero — in **sei settimane su sette**. Non era una scelta, era un'inferenza sbagliata: nel form "Statica / Isolamento (Fisso)" significa *il carico non progredisce*, e l'app lo leggeva come *esercizio di isolamento da portare a cedimento su tutte le serie*. Ora, se la classe dell'esercizio non è dichiarata, **non viene mostrata alcuna indicazione di intensità**: meglio tacere che prescrivere una cosa che non si può dedurre.
