@@ -1,28 +1,36 @@
-const CACHE_NAME = 'gym-tracker-v1.10.0';
+const CACHE_NAME = 'gym-tracker-v1.11.0';
 
 // Asset locali: OBBLIGATORI per il funzionamento offline (cache atomica).
 const LOCAL_ASSETS = [
   './',
   './index.html',
   './manifest.json',
-  './icon.png'
+  './icon.png',
+  './tailwind.css'
+];
+
+// Icone del manifest (v1.11.0): best-effort come i CDN. All'app non servono per funzionare, e
+// sono binari che si rigenerano a parte (tools/make_icons.html): se mancassero sul server,
+// in LOCAL_ASSETS farebbero fallire l'intera installazione e quindi la cache offline.
+const OPTIONAL_ASSETS = [
+  './icon-192.png',
+  './icon-maskable-512.png'
 ];
 
 // Asset da CDN: best-effort. Se un CDN non risponde, NON deve far fallire tutta la cache.
 const CDN_ASSETS = [
-  'https://cdn.tailwindcss.com',
   'https://cdn.jsdelivr.net/npm/chart.js'
 ];
 
-// Installazione: gli asset locali sono obbligatori; i CDN vengono aggiunti singolarmente
-// con catch, così un CDN irraggiungibile non pregiudica l'intera installazione (#5a).
+// Installazione: gli asset locali sono obbligatori; icone e CDN vengono aggiunti singolarmente
+// con catch, così una risorsa irraggiungibile non pregiudica l'intera installazione (#5a).
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       const local = cache.addAll(LOCAL_ASSETS);
       const cdn = Promise.all(
-        CDN_ASSETS.map((url) => cache.add(url).catch((err) => {
-          console.warn('SW: CDN non memorizzato in cache (verrà ritentato in runtime):', url, err);
+        [...OPTIONAL_ASSETS, ...CDN_ASSETS].map((url) => cache.add(url).catch((err) => {
+          console.warn('SW: risorsa non memorizzata in cache (verrà ritentata in runtime):', url, err);
         }))
       );
       return Promise.all([local, cdn]);
