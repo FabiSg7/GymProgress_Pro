@@ -12,10 +12,14 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="GymProgress">
-    <meta name="theme-color" content="#111827">
+    <!-- Uguale al theme_color del manifest e al bg-gray-800 dell'header: questo meta lo sovrascrive,
+         quindi se divergono la barra di stato cambia colore fra splash e app (SVILUPPO.md regola #19). -->
+    <meta name="theme-color" content="#1f2937">
 
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Tailwind PRECOMPILATO (v1.11.0), non più il CDN che compilava nel browser a ogni avvio.
+         Classe nuova nel file ⇒ rigenerare tailwind.css (comando in tools/tailwind.config.js). -->
+    <link rel="stylesheet" href="tailwind.css">
+    <!-- Chart.js NON è più qui: si carica alla prima apertura di Analisi (loadChartJs, regola #20). -->
     <style>
         .tab-content { display: none; }
         .tab-content.active { display: block; }
@@ -148,7 +152,7 @@
                 </div>
             </div>
 
-            <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow mb-6 animate-fade-in">
+            <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow mb-6">
                 <h3 class="font-semibold mb-3 text-sm text-indigo-400" id="form-exercise-title">2. Aggiungi Esercizio alla Scheda</h3>
                 <div class="space-y-3 text-sm">
                     <div class="grid grid-cols-2 gap-2">
@@ -399,7 +403,7 @@
 
     <script>
         // Parametro Globale Unico di Versione dell'Applicazione
-        const APP_VERSION = '1.10.0';
+        const APP_VERSION = '1.11.0';
 
 		// Database pre-caricato completo
 		const initialPlan = {
@@ -885,8 +889,16 @@
 			if (!weekSelect) return;
 			let optionsHtml = "";
 			if (db.planType === "brunaccioni") {
-				const labels = ["S1 · Volume base", "S2 · Volume serie+1", "S3 · Volume picco", "S4 · Intensità +5%", "S5 · Intensità serie+1", "S6 · Intensità picco", "S7 · 🔵 Scarico"];
-				optionsHtml = labels.map((l, i) => `<option value="${i+1}">${l}</option>`).join('');
+				// Generato dalle costanti, non scritto a mano: le voci seguono BRUNACCIONI_WEEKS e il "+5%"
+				// segue BRUNACCIONI_BUMP (la trappola del "9" della regola #13). Le soglie dei blocchi sono
+				// quelle di getCalculatedTarget(): se cambiano lì, vanno cambiate anche qui.
+				const bump = `+${Math.round((BRUNACCIONI_BUMP - 1) * 100)}%`;
+				const block = (w) => w <= 3 ? ["Volume base", "Volume serie+1", "Volume picco"][w - 1]
+					: w <= 6 ? [`Intensità ${bump}`, "Intensità serie+1", "Intensità picco"][w - 4]
+					: "🔵 Scarico";
+				for (let w = 1; w <= BRUNACCIONI_WEEKS; w++) {
+					optionsHtml += `<option value="${w}">S${w} · ${block(w)}</option>`;
+				}
 			} else {
 				for (let i = 1; i <= db.customWeeks; i++) {
 					optionsHtml += `<option value="${i}">Settimana ${i}</option>`;
@@ -1031,6 +1043,68 @@
 			return `${sets} set x ${qty} ${measureUnit(o)} @ ${w} kg${r ? ` · ${r}` : ''}`;
 		}
 
+		// Pesi della sessione più recente registrata per un esercizio, serie per serie. Il match è
+		// per NOME, come grafico e consolidamento (lo storico non porta l'id). "Più recente" = ultima
+		// voce dell'array, non la data: `date` è in formato it-IT e non si ordina come stringa.
+		// `target` = carico prescritto quel giorno (`targetWeight`, salvato dalla v1.11.0); null
+		// sulle voci più vecchie. null = nessuno storico.
+		function lastSessionFor(name) {
+			const hist = db.history || [];
+			for (let i = hist.length - 1; i >= 0; i--) {
+				const h = hist[i];
+				if (h.exercise === name && Array.isArray(h.sets) && h.sets.length) {
+					const t = parseFloat(h.targetWeight);
+					return {
+						week: parseInt(h.week, 10) || null,
+						weights: h.sets.map(s => parseFloat(s.weight) || 0),
+						target: Number.isFinite(t) ? t : null
+					};
+				}
+			}
+			return null;
+		}
+		function lastLoadFor(name) {
+			const last = lastSessionFor(name);
+			return last ? last.weights : null;
+		}
+
+		// Valore con cui precompilare "Carico (kg)": l'ultimo peso usato davvero (ultima serie della
+		// sessione più recente, quello su cui ci si era assestati), ma solo finché la prescrizione è
+		// la stessa di allora. Se il target si è mosso (+5% della S4, scarico, +kg/settimana, nuovo
+		// ciclo dopo il consolidamento) torna il target: col vecchio peso già scritto, un tap su
+		// "Salva" registrerebbe la progressione come non eseguita (regola #13).
+		// `isStatic`: item di circuito, senza progressione per design (regola #8).
+		function prefillWeight(o, targetWeight, isStatic = false) {
+			const last = lastSessionFor(o.name);
+			if (!last) return targetWeight;
+			const used = last.weights[last.weights.length - 1];
+			// 0 su un esercizio con carico = campo lasciato vuoto, non una scelta da riproporre.
+			if (used === 0 && (parseFloat(targetWeight) || 0) > 0) return targetWeight;
+			// La prescrizione di allora è quella salvata con la sessione: così si vede anche un carico
+			// base modificato a mano in Programma, che ricalcolando col piano di oggi sposterebbe
+			// insieme il target di allora e quello di adesso.
+			if (last.target !== null) return last.target === (parseFloat(targetWeight) || 0) ? used : targetWeight;
+			// Voci salvate prima della v1.11.0, senza `targetWeight`: il target di allora si ricalcola.
+			if (!isStatic && (!last.week || getCalculatedTarget(o, last.week).weight !== targetWeight)) return targetWeight;
+			return used;
+		}
+
+		// Riga "Ultimo carico" sotto il target: chi usa un peso diverso da quello prescritto lo
+		// registra nella serie, ma senza questa riga lo ritrova solo aprendo lo storico.
+		// Pesi tutti uguali ⇒ un valore; diversi ⇒ la lista in ordine di serie. Ambra se diverge dal
+		// target (nelle settimane "≈" quasi sempre: il target è una stima, regola #13), grigia se
+		// coincide. Nessuna riga senza storico, né a corpo libero (target e ultimo carico tutti 0).
+		function lastLoadHtml(name, targetWeight, extraClass = '') {
+			const w = lastLoadFor(name);
+			if (!w) return '';
+			const tw = parseFloat(targetWeight) || 0;
+			if (tw === 0 && w.every(x => x === 0)) return '';
+			const uniform = w.every(x => x === w[0]);
+			const text = uniform ? `${w[0]}` : w.join(' · ');
+			const color = (uniform && w[0] === tw) ? 'text-gray-400' : 'text-amber-300';
+			return `<p class="text-[11px] ${color} ${extraClass}">Ultimo carico: ${esc(text)} kg</p>`;
+		}
+
 		// --- Cronometro conta-secondi (tempo sotto tensione) ---
 		// Multi-istanza: keyed per l'id dell'input Secondi che pilota (es. 'input-reps', 'input-reps-partner',
 		// 'input-circuit-reps-2'). Conta in SALITA a partire dal valore già presente nell'input.
@@ -1160,6 +1234,7 @@
 								<span class="bg-indigo-900/60 text-indigo-300 px-1.5 py-0.5 rounded font-semibold uppercase text-[8px]">${target.label}</span>
 							</div>
 							<p class="text-base font-bold text-indigo-200">${targetLine(ex, target.sets, target.reps, target.weight, target.approx, target.rir)}</p>
+							${lastLoadHtml(ex.name, target.weight)}
 							${ex.note ? `<p class="text-[11px] text-amber-400 italic mt-0.5">📝 Nota: ${esc(ex.note)}</p>` : ''}
 						</div>
 						<div class="border-t border-indigo-900/40 pt-2">
@@ -1168,6 +1243,7 @@
 								<span class="bg-indigo-900/60 text-indigo-300 px-1.5 py-0.5 rounded font-semibold uppercase text-[8px]">${partnerTarget.label}</span>
 							</div>
 							<p class="text-base font-bold text-indigo-200">${targetLine(partnerEx, partnerTarget.sets, partnerTarget.reps, partnerTarget.weight, partnerTarget.approx, partnerTarget.rir)}</p>
+							${lastLoadHtml(partnerEx.name, partnerTarget.weight)}
 							${partnerEx.note ? `<p class="text-[11px] text-amber-400 italic mt-0.5">📝 Nota: ${esc(partnerEx.note)}</p>` : ''}
 						</div>
 					</div>
@@ -1180,6 +1256,7 @@
 							<span id="target-type-badge" class="text-[9px] bg-indigo-900 text-indigo-200 px-1.5 py-0.5 rounded font-bold uppercase">${target.label}</span>
 						</div>
 						<p id="target-text" class="text-lg font-bold text-indigo-200">${target.sets} serie x ${target.reps} ${measureUnit(ex)} @ ${target.approx ? '≈ ' : ''}${target.weight} kg${rirLabel(target.rir) ? ` · ${rirLabel(target.rir)}` : ''}</p>
+						${lastLoadHtml(ex.name, target.weight)}
 						${target.approx ? `
 						<details class="mt-1">
 							<summary class="text-[11px] text-gray-400">≈ stima al +5%${target.deload ? '' : ` · alt. ${isoeffortAltReps(ex)} ${measureUnit(ex)} @ ${ex.weight} kg`} <span class="text-indigo-400 font-bold">ⓘ</span></summary>
@@ -1203,11 +1280,11 @@
 					<div class="space-y-4">
 						<div class="p-3 bg-gray-900/40 rounded-lg border border-indigo-950">
 							<p class="text-xs font-bold text-indigo-400 mb-2">A: ${esc(ex.name)}${isTimed(ex) ? ' ⏱️' : ''}</p>
-							${measureInputsHtml(ex, 'input-reps', 'input-weight', target.reps, target.weight)}
+							${measureInputsHtml(ex, 'input-reps', 'input-weight', target.reps, prefillWeight(ex, target.weight))}
 						</div>
 						<div class="p-3 bg-gray-900/40 rounded-lg border border-purple-950">
 							<p class="text-xs font-bold text-purple-400 mb-2">B: ${esc(partnerEx.name)}${isTimed(partnerEx) ? ' ⏱️' : ''}</p>
-							${measureInputsHtml(partnerEx, 'input-reps-partner', 'input-weight-partner', partnerTarget.reps, partnerTarget.weight)}
+							${measureInputsHtml(partnerEx, 'input-reps-partner', 'input-weight-partner', partnerTarget.reps, prefillWeight(partnerEx, partnerTarget.weight))}
 						</div>
 					</div>
 					<button onclick="addSetToCurrentWorkout()" id="btn-save-temp-set" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-lg transition-colors mt-3 text-sm">
@@ -1218,7 +1295,7 @@
 				inputsContainer.innerHTML = `
 					<h3 class="font-semibold mb-3 text-gray-200" id="set-counter-title">Registra Serie 1</h3>
 					<div class="mb-3">
-						${measureInputsHtml(ex, 'input-reps', 'input-weight', target.reps, target.weight)}
+						${measureInputsHtml(ex, 'input-reps', 'input-weight', target.reps, prefillWeight(ex, target.weight))}
 					</div>
 					<button onclick="addSetToCurrentWorkout()" id="btn-save-temp-set" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-lg transition-colors text-sm">
 						💾 Salva Serie
@@ -1263,7 +1340,7 @@
 							<span class="text-[9px] bg-amber-900 text-amber-200 px-1.5 py-0.5 rounded font-bold uppercase">CIRCUITO</span>
 						</div>
 						<ol class="list-decimal list-inside space-y-0.5 text-sm text-indigo-200">
-							${items.map(it => `<li><strong>${esc(it.name)}</strong> — ${it.reps} ${measureUnit(it)}${(it.weight > 0) ? ` @ ${it.weight} kg` : ''}${isTimed(it) ? ' ⏱️' : ''}</li>`).join('')}
+							${items.map(it => `<li><strong>${esc(it.name)}</strong> — ${it.reps} ${measureUnit(it)}${(it.weight > 0) ? ` @ ${it.weight} kg` : ''}${isTimed(it) ? ' ⏱️' : ''}${lastLoadHtml(it.name, it.weight, 'pl-4')}</li>`).join('')}
 						</ol>
 						<p class="text-[11px] text-gray-400 italic">Esegui tutti gli esercizi in fila senza pausa; il recupero (${defaultRestSeconds}s) parte a fine giro.</p>
 						${circuit.note ? `<p class="text-[11px] text-amber-400 italic">📝 Nota: ${esc(circuit.note)}</p>` : ''}
@@ -1277,7 +1354,7 @@
 				const itemInputs = items.map((it, i) => `
 					<div class="p-3 bg-gray-900/40 rounded-lg border border-amber-950">
 						<p class="text-xs font-bold text-amber-400 mb-2">${i + 1}. ${esc(it.name)}${isTimed(it) ? ' ⏱️' : ''}</p>
-						${measureInputsHtml(it, `input-circuit-reps-${i}`, `input-circuit-weight-${i}`, it.reps, it.weight)}
+						${measureInputsHtml(it, `input-circuit-reps-${i}`, `input-circuit-weight-${i}`, it.reps, prefillWeight(it, it.weight, true))}
 					</div>
 				`).join('');
 				inputsContainer.innerHTML = `
@@ -1823,6 +1900,10 @@
 
 		function collectMesocycleOutcome() {
 			const rows = [];
+			// Il consolidamento è del protocollo (blocco intensità S4-S6): nel piano Personalizzato un
+			// esercizio rimasto `progression: 'brunaccioni'` non ha target che salgono, e il riepilogo
+			// mostrerebbe un "picco" che non esiste.
+			if (db.planType !== 'brunaccioni') return rows;
 			(db.plan.days || []).forEach((day, dayIdx) => {
 				(day.exercises || []).forEach(ex => {
 					// Circuiti statici per design (v1.5.0) ed esercizi non-target (nessuna progressione
@@ -1937,6 +2018,9 @@
 
 			const ex = db.plan.days[dayIdx].exercises[exIdx];
 			const today = new Date().toLocaleDateString('it-IT');
+			// `targetWeight`: il carico prescritto oggi, lo stesso mostrato nel Target Programmato. Serve
+			// a prefillWeight() per capire se la prescrizione è cambiata da allora (v1.11.0).
+			const targetWeightOf = (o) => parseFloat(getCalculatedTarget(o, week).weight) || 0;
 
 			if (currentSessionMode === 'circuit') {
 				// Ogni item del circuito diventa una voce di storico separata (linea di volume propria).
@@ -1948,7 +2032,8 @@
 						.map(round => (round.items && round.items[i]) ? { weight: round.items[i].weight, reps: round.items[i].reps } : null)
 						.filter(Boolean);
 					if (setsForItem.length === 0) return;
-					db.history.push({ date: today, week: week, exercise: it.name, sets: setsForItem, measure: exMeasure(it) });
+					// Item di circuito: il target è il peso del piano, senza progressione (regola #8).
+					db.history.push({ date: today, week: week, exercise: it.name, sets: setsForItem, measure: exMeasure(it), targetWeight: parseFloat(it.weight) || 0 });
 				});
 			} else if (currentSessionMode === 'superset') {
 				const partnerId = ex.superSetWith;
@@ -1961,7 +2046,8 @@
 					week: week,
 					exercise: ex.name,
 					sets: currentSessionSets.map(s => s.exA),
-					measure: exMeasure(ex)
+					measure: exMeasure(ex),
+					targetWeight: targetWeightOf(ex)
 				});
 
 				db.history.push({
@@ -1969,7 +2055,8 @@
 					week: week,
 					exercise: partnerEx.name,
 					sets: currentSessionSets.map(s => s.exB),
-					measure: exMeasure(partnerEx)
+					measure: exMeasure(partnerEx),
+					targetWeight: targetWeightOf(partnerEx)
 				});
 			} else {
 				db.history.push({
@@ -1977,7 +2064,8 @@
 					week: week,
 					exercise: ex.name,
 					sets: currentSessionSets,
-					measure: exMeasure(ex)
+					measure: exMeasure(ex),
+					targetWeight: targetWeightOf(ex)
 				});
 			}
 
@@ -1991,16 +2079,22 @@
 
 			// Avanza il cursore (esercizio → giorno → settimana → ricomincia) e adatta il messaggio.
 			const phase = advanceWorkoutCursor();
+			// Fine ciclo: il riepilogo si annuncia solo se comparirà davvero (solo Brunaccioni, solo
+			// esercizi target); il numero di settimane è quello del piano, non un "7" scritto a mano.
+			const review = phase === 'restart' && collectMesocycleOutcome().length > 0;
+			const restart = db.planType === 'brunaccioni'
+				? `🏆 Mesociclo completato (${BRUNACCIONI_WEEKS} settimane, scarico incluso)! ${review ? 'Ora il riepilogo dei carichi.' : 'Si riparte dalla Settimana 1.'}`
+				: `🏆 Ciclo completato (${db.customWeeks} settimane)! Si riparte dalla Settimana 1.`;
 			const messages = {
 				exercise: '✅ Esercizio salvato! Passo al successivo.',
 				day: '✅ Giorno completato! Passo al giorno successivo.',
 				week: '🎉 Settimana completata! Passo alla settimana successiva (Giorno 1).',
-				restart: '🏆 Mesociclo completato (7 settimane, scarico incluso)! Ora il riepilogo dei carichi.'
+				restart
 			};
 			alert(messages[phase] || 'Esercizio salvato con successo!');
 			// Mesociclo concluso → riepilogo con consolidamento dei carichi (v1.9.0). Va DOPO l'alert:
 			// è un overlay, e mostrarlo prima lo lascerebbe sotto un dialogo nativo bloccante.
-			if (phase === 'restart') reviewMesocycleEnd();
+			if (review) reviewMesocycleEnd();
 		}
 
 		function archiveCurrentPlan() {
@@ -2858,6 +2952,35 @@
 			select.innerHTML = distinctExercises.map(ex => `<option value="${esc(ex)}">${esc(ex)}</option>`).join('');
 		}
 
+		// Chart.js si carica SOLO alla prima apertura di Analisi (v1.11.0, regola #20): era uno
+		// <script> bloccante nella <head> per un grafico che vive in un tab solo. Stesso URL di
+		// CDN_ASSETS in sw.js, così arriva dalla cache del Service Worker anche offline. La promise
+		// è condivisa fra le chiamate; se il caricamento fallisce si azzera e il tentativo dopo riprova.
+		const CHART_JS_URL = 'https://cdn.jsdelivr.net/npm/chart.js';
+		let chartJsPromise = null;
+		function loadChartJs() {
+			if (typeof Chart !== 'undefined') return Promise.resolve();
+			if (!chartJsPromise) {
+				chartJsPromise = new Promise((resolve, reject) => {
+					const s = document.createElement('script');
+					s.src = CHART_JS_URL;
+					s.onload = () => resolve();
+					s.onerror = () => { s.remove(); chartJsPromise = null; reject(new Error('Chart.js non caricato')); };
+					document.head.appendChild(s);
+				});
+			}
+			return chartJsPromise;
+		}
+
+		// Testo del riquadro sopra il grafico: senza argomento torna quello del markup ("Nessun dato…"),
+		// salvato al primo uso, così un messaggio d'errore non resta al posto dell'avviso normale.
+		function setChartMessage(text) {
+			const msg = document.getElementById('chart-empty-msg');
+			if (!msg) return;
+			if (msg.dataset.defaultText === undefined) msg.dataset.defaultText = msg.textContent.trim();
+			msg.textContent = text || msg.dataset.defaultText;
+		}
+
 		function buildVolumeChart() {
 			const exName = document.getElementById('chart-exercise-select')?.value;
 			const canvas = document.getElementById('volumeChart');
@@ -2867,8 +2990,18 @@
 
 			const filteredLogs = db.history.filter(log => log.exercise === exName);
 			if (filteredLogs.length === 0 || !exName) {
+				setChartMessage();
 				document.getElementById('chart-empty-msg')?.classList.remove('hidden');
 				canvas.classList.add('hidden');
+				return;
+			}
+			// Senza dati la libreria non serve: si carica solo qui, quando c'è davvero da disegnare.
+			if (typeof Chart === 'undefined') {
+				loadChartJs().then(buildVolumeChart, () => {
+					setChartMessage('Grafico non disponibile: la libreria dei grafici non si è caricata. La prima volta serve la rete; riprova cambiando esercizio.');
+					document.getElementById('chart-empty-msg')?.classList.remove('hidden');
+					canvas.classList.add('hidden');
+				});
 				return;
 			}
 			document.getElementById('chart-empty-msg')?.classList.add('hidden');
@@ -3072,7 +3205,9 @@
 			if (document.getElementById('update-banner')) return; // già mostrato
 			const banner = document.createElement('div');
 			banner.id = 'update-banner';
-			banner.className = 'fixed bottom-20 left-0 right-0 z-[60] px-4';
+			// Entra salendo in dissolvenza (keyframes in tools/tailwind.config.js). `motion-safe:` la
+			// spegne con "Rimuovi animazioni" di Android: compare e basta, come prima della 1.11.0.
+			banner.className = 'fixed bottom-20 left-0 right-0 z-[60] px-4 motion-safe:animate-fade-in';
 			banner.innerHTML = `
 				<div class="max-w-md mx-auto bg-indigo-600 text-white rounded-xl shadow-lg p-3 flex items-center justify-between gap-3">
 					<span class="text-xs font-semibold">🔄 Nuova versione disponibile</span>
