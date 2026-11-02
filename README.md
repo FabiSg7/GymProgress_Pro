@@ -16,8 +16,8 @@ I dati restano **solo sul tuo dispositivo** (nel `localStorage` del browser); no
   - ⏱️ Supporto **esercizi a tempo** (plank, wall sit, farmer's carry…): misurati in secondi con un **cronometro** integrato, sia standalone sia dentro circuiti/super serie.
   - Badge "**Ultimo fatto / Prossimo suggerito**" per non perdere il filo della rotazione dei giorni.
 - **📅 Programma** — Crei e modifichi la scheda: giorni, esercizi (serie, ripetizioni, peso, recupero, nota logistica), riordino su/giù degli esercizi e **archivio** di più schede salvate.
-- **📊 Analisi** — Grafico a linee del **tonnellaggio totale** (somma di peso × ripetizioni di ogni serie completata) per ciascun esercizio, per visualizzare la progressione del volume.
-- **📜 Impostazioni & Storico** — **Backup Esporta/Importa** in JSON (per cambiare telefono senza perdere i dati), pulizia dello storico e reset totale.
+- **📊 Analisi** — Grafico a linee per ciascun esercizio: il **tonnellaggio** (somma di peso × ripetizioni di ogni serie) quando c'è il carico, le **ripetizioni** o i **secondi** totali quando non c'è, entrambe le linee se l'esercizio ha sedute con e senza carico. Toccando un punto vedi da quali serie viene il valore.
+- **📜 Impostazioni & Storico** — **Backup Esporta/Importa** in JSON (per cambiare telefono senza perdere i dati), pulizia dello storico e reset totale. Lo **storico** delle serie registrate è **raggruppato per giorno** e si consulta con una **ricerca per nome dell'esercizio e per giorno**.
 
 ### Modelli di progressione
 
@@ -100,6 +100,21 @@ I dati vivono nel `localStorage` del browser: **cancellare i dati di navigazione
 ---
 
 ## 📝 Changelog
+
+### v1.12.0
+- **Ricerca nello storico.** In *Impostazioni*, sopra l'elenco delle serie registrate, c'è ora il riquadro **📜 Storico Allenamenti**. Prima lo storico era un elenco unico dalla sessione più recente, e per ritrovare un esercizio o un giorno bisognava scorrerlo tutto.
+  - **Per esercizio**: scrivi nella casella una parte del nome. Maiuscole e accenti non contano (`alzate` trova *Alzàte Laterali*), e con più parole devono esserci tutte, in qualunque ordine (`manubri panca` trova *Panca Inclinata Manubri*).
+  - **Per giorno**: il menu elenca **solo i giorni in cui hai registrato qualcosa**, dal più recente, con il numero di esercizi di quel giorno. Così non capita di scegliere un giorno vuoto.
+  - I due filtri si **combinano** (per esempio *panca* il 28/10). Sotto compare quante voci sono state trovate, e **✕ Azzera** riporta l'elenco completo.
+  - I filtri restano impostati se cambi tab e poi torni. Se svuoti lo storico si azzerano da soli.
+- **Storico raggruppato per giorno, più compatto.** Prima ogni esercizio aveva il suo riquadro, con data e settimana ripetute ogni volta, e con molte sedute l'elenco diventava lungo da scorrere. Ora ogni giorno ha una **testata con la data e la settimana**, una volta sola. Sotto ci sono gli esercizi di quel giorno **nell'ordine in cui li hai fatti**, divisi da una linea sottile, con le serie scritte per esteso come prima. A parità di storico l'elenco è quasi un terzo più corto.
+  - Se nello stesso giorno hai registrato esercizi di due settimane diverse (per esempio hai finito una settimana e iniziato la successiva), la testata le riporta entrambe e ogni esercizio mostra la sua.
+- **Grafico di *Analisi* corretto per le sedute senza carico.** Il grafico misurava solo il tonnellaggio (peso × ripetizioni), e una seduta senza peso valeva zero. Gli esercizi a corpo libero (Dips, Crunch inverso) erano una linea piatta a zero, il Crunch fatto senza peso nella prima settimana risultava a zero, e la prima zavorra su un esercizio a tempo come il Plank azzerava tutte le sedute precedenti. Ora:
+  - senza carico il grafico mostra le **ripetizioni totali**, o i **secondi** per gli esercizi a tempo;
+  - con il carico in tutte le sedute resta il **tonnellaggio**, come prima;
+  - se un esercizio ha sedute con e senza carico compaiono **due linee**: le ripetizioni (o i secondi) su tutte le sedute e, tratteggiato in verde con l'asse a destra, il tonnellaggio da quando hai aggiunto il peso.
+- **Tocca un punto del grafico per vedere da dove viene il valore.** Il punto si evidenzia, e sotto il grafico compaiono le serie di quella seduta e il calcolo, per esempio *132 + 132 + 132 + 132 + 132 = 660 kg*. Il pulsante **📜 Apri la seduta nello Storico** porta a quel giorno nello Storico. Il riquadro scuro che compariva sopra il punto non c'è più: copriva il punto, e il dettaglio sotto il grafico dice di più.
+- Nessuna migrazione dei dati: lo storico e i backup esistenti restano validi così come sono.
 
 ### v1.11.0
 - **Nel *Target Programmato* ora vedi anche il carico che hai usato l'ultima volta.** Se in palestra carichi un peso diverso da quello indicato, lo registri nella serie, ma alla sessione successiva l'app ti mostrava di nuovo solo il target e per ritrovare il peso vero dovevi aprire lo storico. Ora sotto il target compare una riga **`Ultimo carico: 62.5 kg`**, letta dall'ultima volta che hai completato quell'esercizio.
