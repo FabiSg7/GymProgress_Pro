@@ -337,7 +337,9 @@
                 </div>
                 <canvas id="volumeChart"></canvas>
             </div>
-            <p class="text-[11px] text-gray-400 mt-2 px-1">💡 Il grafico calcola il <strong>Tonnellaggio Totale</strong> (Somma di: Peso × Reps per ogni serie completata) per tracciare la progressione lineare del volume.</p>
+            <!-- Dettaglio del punto toccato (v1.12.0): lo scrive showChartDetail(), nascosto finché non si tocca un punto. -->
+            <div id="chart-detail" class="hidden bg-gray-800 p-4 rounded-xl border border-gray-700 shadow mt-3 text-xs space-y-1" style="scroll-margin-bottom: 80px"></div>
+            <p class="text-[11px] text-gray-400 mt-2 px-1">💡 Con il carico il grafico mostra il <strong>tonnellaggio</strong> (peso × ripetizioni di ogni serie), senza carico le <strong>ripetizioni</strong> (o i secondi) totali. Se un esercizio ha sedute con e senza carico compaiono entrambe le linee. <strong>Tocca un punto</strong> per vedere come è calcolato.</p>
         </div>
 
         <!-- TAB IMPOSTAZIONI -->
@@ -375,6 +377,19 @@
                 </div>
             </div>
 
+            <!-- Ricerca nello storico (v1.12.0): nome dell'esercizio + menu dei soli giorni registrati,
+                 combinabili. Nascosta a storico vuoto (renderHistory). -->
+            <div id="history-search-box" class="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow mb-4 space-y-3">
+                <h3 class="text-sm font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">📜 Storico Allenamenti</h3>
+                <!-- Invio (tasto "cerca" della tastiera) chiude la tastiera: i risultati sono già filtrati. -->
+                <input type="search" id="history-search-input" placeholder="🔍 Cerca esercizio…" aria-label="Cerca esercizio nello storico" autocomplete="off" oninput="renderHistoryList()" onkeydown="if (event.key === 'Enter') this.blur()" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-sm">
+                <select id="history-date-select" aria-label="Filtra lo storico per data" onchange="renderHistoryList()" class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white text-sm"></select>
+                <div class="flex justify-between items-center">
+                    <span id="history-count" class="text-[11px] text-gray-400"></span>
+                    <button id="history-clear-filters" onclick="clearHistoryFilters()" class="hidden text-indigo-400 hover:text-indigo-200 text-xs font-semibold">✕ Azzera</button>
+                </div>
+            </div>
+
             <div id="history-container" class="space-y-4"></div>
 			
 			<div class="text-center text-[10px] text-gray-600 mt-8 pb-4">
@@ -403,7 +418,7 @@
 
     <script>
         // Parametro Globale Unico di Versione dell'Applicazione
-        const APP_VERSION = '1.11.0';
+        const APP_VERSION = '1.12.0';
 
 		// Database pre-caricato completo
 		const initialPlan = {
@@ -455,6 +470,11 @@
         let editingSetIndex = null;
 		let currentEditState = { dayIdx: null, exIdx: null };
 		let volumeChartInstance = null;
+		// Grafico di Analisi (v1.12.0): le voci disegnate nell'ordine dei punti, le grandezze disegnate
+		// ('qty' = ripetizioni o secondi, 'load' = carico) e il punto toccato (null = nessuno).
+		let chartLogs = [];
+		let chartKinds = [];
+		let chartSelectedIdx = null;
 
 		// --- Stato modalità Workout ---
 		// 'single'   = esercizio normale (una serie per volta)
@@ -2986,6 +3006,7 @@
 			const canvas = document.getElementById('volumeChart');
 			if (!canvas) return;
 			const ctx = canvas.getContext('2d');
+			hideChartDetail();   // prima di destroy(): l'aggiornamento del punto evidenziato serve il grafico vivo
 			if (volumeChartInstance) volumeChartInstance.destroy();
 
 			const filteredLogs = db.history.filter(log => log.exercise === exName);
@@ -3009,53 +3030,160 @@
 
 			const labels = filteredLogs.map(log => `${log.date} (Sett. ${log.week})`);
 
-			// Per esercizi a TEMPO (log.measure === 'time', in cui `reps` = secondi):
-			//  - se c'è una zavorra (qualche set con peso > 0) → metrica = carico × secondi
-			//  - altrimenti → secondi totali tenuti (progressione della durata)
-			// Per esercizi a reps: tonnellaggio classico (peso × reps). Retrocompat: log senza
-			// `measure` = reps. La scelta della metrica è coerente su tutta la serie (un'unica scala Y).
+			// Due grandezze per voce (chartStats): la QUANTITÀ (ripetizioni, o secondi se a tempo: lì
+			// `reps` = secondi) e il CARICO (somma di peso × quantità). Una seduta "ha carico" se almeno
+			// una serie ha peso > 0. Retrocompat: voce senza `measure` = reps.
+			//  - tutte con carico → una linea, il carico (tonnellaggio, o carico × secondi);
+			//  - nessuna con carico → una linea, la quantità (ripetizioni o secondi totali);
+			//  - miste → due linee: la quantità su tutte le sedute (asse sinistro) e il carico solo dove
+			//    c'è (asse destro, null altrove). Con una sola metrica per tutta la serie, il primo carico
+			//    azzerava le sedute precedenti (Plank: 180 s diventavano 0) e i Dips a corpo libero
+			//    restavano una linea piatta a zero.
 			const timed = filteredLogs.some(l => l.measure === 'time');
-			const anyWeighted = filteredLogs.some(l => l.sets.some(s => (s.weight || 0) > 0));
-			let datasetLabel, dataPoints;
-			if (timed && !anyWeighted) {
-				datasetLabel = 'Tempo sotto tensione (secondi totali)';
-				dataPoints = filteredLogs.map(log => log.sets.reduce((t, s) => t + s.reps, 0));
-			} else if (timed && anyWeighted) {
-				datasetLabel = 'Volume a tempo (carico × secondi)';
-				dataPoints = filteredLogs.map(log => log.sets.reduce((t, s) => t + (s.weight * s.reps), 0));
-			} else {
-				datasetLabel = 'Volume Totale (tonnellaggio in kg)';
-				dataPoints = filteredLogs.map(log => log.sets.reduce((t, s) => t + (s.weight * s.reps), 0));
-			}
+			const qtyLabel = timed ? 'Tempo sotto tensione (secondi totali)' : 'Ripetizioni totali';
+			const loadLabel = timed ? 'Volume a tempo (carico × secondi)' : 'Volume Totale (tonnellaggio in kg)';
+			const stats = filteredLogs.map(chartStats);
+			const weighted = stats.filter(s => s.weighted).length;
+			chartKinds = weighted === stats.length ? ['load'] : weighted === 0 ? ['qty'] : ['qty', 'load'];
+			chartLogs = filteredLogs;
+			const two = chartKinds.length === 2;
+			const COLORS = {
+				qty: { line: '#818cf8', fill: 'rgba(129, 140, 248, 0.15)', point: '#6366f1' },
+				load: { line: '#34d399', fill: 'rgba(52, 211, 153, 0.15)', point: '#10b981' },
+			};
+			// Il punto toccato è più grande e bianco (scriptable: si ricalcola a ogni update()).
+			// Con due linee il carico è tratteggiato, a rombi e disegnato SOPRA (order più basso): due
+			// grandezze che crescono in proporzione, su assi indipendenti, cadono alla stessa altezza e
+			// una linea piena nasconderebbe l'altra (Crunch: 45 rep e 450 kg costanti, sovrapposti).
+			const datasets = chartKinds.map((kind, k) => {
+				const c = COLORS[two ? kind : 'qty'];   // con una linea sola resta il colore di sempre
+				const dashed = two && kind === 'load';
+				return {
+					...(dashed ? { borderDash: [6, 4], pointStyle: 'rectRot' } : {}),
+					order: dashed ? 0 : 1,
+					label: kind === 'qty' ? qtyLabel : loadLabel,
+					data: stats.map(s => kind === 'qty' ? s.qty : (two && !s.weighted ? null : s.load)),
+					yAxisID: k === 0 ? 'y' : 'y1',
+					borderColor: c.line,
+					backgroundColor: c.fill,
+					borderWidth: 3,
+					pointBackgroundColor: p => p.dataIndex === chartSelectedIdx ? '#ffffff' : c.point,
+					pointRadius: p => p.dataIndex === chartSelectedIdx ? 7 : 4,
+					pointHoverRadius: 7,
+					tension: 0.25,
+					fill: k === 0
+				};
+			});
+			const axis = (color, title) => ({
+				grid: { color: '#374151' }, ticks: { color, font: { size: 10 } },
+				title: { display: two, text: title, color, font: { size: 10 } }
+			});
 
 			volumeChartInstance = new Chart(ctx, {
 				type: 'line',
-				data: {
-					labels: labels,
-					datasets: [{
-						label: datasetLabel,
-						data: dataPoints,
-						borderColor: '#818cf8', 
-						backgroundColor: 'rgba(129, 140, 248, 0.15)',
-						borderWidth: 3,
-						pointBackgroundColor: '#6366f1',
-						pointRadius: 4,
-						tension: 0.25,
-						fill: true
-					}]
-				},
+				data: { labels: labels, datasets },
 				options: {
 					responsive: true,
 					maintainAspectRatio: false,
+					// Un tocco su una colonna = quella seduta, su tutte le linee (anche fuori dal punto).
+					interaction: { mode: 'index', intersect: false },
+					onClick: (evt, elements) => { if (elements.length) showChartDetail(elements[0].index); },
 					scales: {
 						x: { grid: { color: '#374151' }, ticks: { color: '#9ca3af', font: { size: 9 } } },
-						y: { grid: { color: '#374151' }, ticks: { color: '#9ca3af', font: { size: 10 } } }
+						y: axis(two ? '#a5b4fc' : '#9ca3af', timed ? 'sec' : 'rep'),
+						...(two ? { y1: { ...axis('#6ee7b7', timed ? 'kg × sec' : 'kg'), position: 'right', grid: { drawOnChartArea: false } } } : {})
 					},
 					plugins: {
-						legend: { labels: { color: '#f3f4f6', font: { size: 11, weight: 'bold' } } }
+						// `order` decide anche l'ordine della legenda: qui si torna a quello delle linee.
+						legend: { labels: { color: '#f3f4f6', font: { size: 11, weight: 'bold' }, sort: (a, b) => a.datasetIndex - b.datasetIndex } },
+						// Niente tooltip: copriva il punto evidenziato, e il pannello sotto il grafico dà
+						// valore e calcolo. Resta l'ingrandimento del punto al passaggio (pointHoverRadius).
+						tooltip: { enabled: false }
 					}
 				}
 			});
+		}
+
+		// Quantità e carico di una voce. parseFloat: un backup importato può portare numeri come testo,
+		// e `t + s.reps` li avrebbe concatenati.
+		function chartStats(log) {
+			const num = v => parseFloat(v) || 0;
+			const sets = log.sets || [];
+			return {
+				qty: sets.reduce((t, s) => t + num(s.reps), 0),
+				load: sets.reduce((t, s) => t + num(s.weight) * num(s.reps), 0),
+				weighted: sets.some(s => num(s.weight) > 0),
+			};
+		}
+
+		function fmtNum(n) {
+			return String(Math.round(n * 100) / 100);
+		}
+
+		// Dettaglio del punto toccato: le serie della seduta e, per ogni linea disegnata, la somma che
+		// dà il valore del punto. Gli handler ricevono l'INDICE, mai la data: un testo dell'utente in
+		// un onclick="…" verrebbe decodificato dall'HTML prima di arrivare al JS, e esc() non basta.
+		function showChartDetail(idx) {
+			const log = chartLogs[idx];
+			const box = document.getElementById('chart-detail');
+			if (!log || !box) return;
+			chartSelectedIdx = idx;
+			if (volumeChartInstance) volumeChartInstance.update('none');
+			const num = v => parseFloat(v) || 0;
+			const timed = log.measure === 'time';
+			const unit = timed ? 'sec' : 'rep';
+			const loadUnit = timed ? 'kg × sec' : 'kg';
+			const sets = log.sets || [];
+			const st = chartStats(log);
+			const setRows = sets.map((s, i) => num(s.weight) > 0
+				? `<div class="text-gray-300">Serie ${i + 1}: <strong>${esc(s.weight)} kg</strong> × ${esc(s.reps)} ${unit} = ${fmtNum(num(s.weight) * num(s.reps))} ${loadUnit}</div>`
+				: `<div class="text-gray-300">Serie ${i + 1}: ${esc(s.reps)} ${unit} <span class="text-gray-500">(senza carico)</span></div>`
+			).join('');
+			const sumRow = kind => {
+				if (kind === 'qty') {
+					return `${timed ? 'Tempo sotto tensione (secondi totali)' : 'Ripetizioni totali'}: ${sets.map(s => fmtNum(num(s.reps))).join(' + ')} = <strong>${fmtNum(st.qty)} ${unit}</strong>`;
+				}
+				if (!st.weighted) return `${timed ? 'Volume a tempo' : 'Tonnellaggio'}: nessun carico in questa seduta`;
+				return `${timed ? 'Volume a tempo (carico × secondi)' : 'Volume Totale (tonnellaggio in kg)'}: ${sets.map(s => fmtNum(num(s.weight) * num(s.reps))).join(' + ')} = <strong>${fmtNum(st.load)} ${loadUnit}</strong>`;
+			};
+			box.innerHTML = `
+				<div class="flex justify-between items-center mb-1">
+					<span class="font-bold text-indigo-300 text-sm">📍 ${esc(historyDay(log.date).label)} · Settimana ${esc(log.week)}</span>
+					<button onclick="hideChartDetail()" class="text-gray-400 hover:text-white text-sm px-2" aria-label="Chiudi il dettaglio">✕</button>
+				</div>
+				${setRows}
+				<div class="border-t border-gray-700 pt-2 mt-2 space-y-1 text-gray-200">
+					${chartKinds.map(k => `<div>${sumRow(k)}</div>`).join('')}
+				</div>
+				<button onclick="openHistoryDay(${idx})" class="w-full bg-gray-700 hover:bg-gray-600 text-gray-200 font-semibold py-2 px-3 rounded-lg text-xs mt-2">📜 Apri la seduta nello Storico</button>`;
+			box.classList.remove('hidden');
+			// Sul telefono il pannello cade sotto la barra in basso: lo si porta in vista quanto basta
+			// (scroll-margin-bottom nel markup = altezza della barra).
+			box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+		}
+
+		function hideChartDetail() {
+			const box = document.getElementById('chart-detail');
+			if (box) { box.classList.add('hidden'); box.innerHTML = ''; }
+			if (chartSelectedIdx !== null) {
+				chartSelectedIdx = null;
+				if (volumeChartInstance) volumeChartInstance.update('none');
+			}
+		}
+
+		// Dal punto del grafico alla seduta: Storico filtrato su quel giorno (ricerca per nome vuota,
+		// così si vede la seduta intera).
+		function openHistoryDay(idx) {
+			const log = chartLogs[idx];
+			if (!log) return;
+			switchTab('history');   // renderHistory() ricostruisce il menu dei giorni
+			const input = document.getElementById('history-search-input');
+			const sel = document.getElementById('history-date-select');
+			if (input) input.value = '';
+			if (sel) sel.value = historyDay(log.date).value;
+			renderHistoryList();
+			const box = document.getElementById('history-search-box');
+			if (box) window.scrollTo({ top: box.getBoundingClientRect().top + window.scrollY - 76, behavior: 'smooth' });
 		}
 
 		function exportDataBackup() {
@@ -3133,33 +3261,143 @@
 			}
 		}
 
+		// ============================================================================
+		// STORICO — ricerca per esercizio e per data (v1.12.0)
+		// ============================================================================
+		// Giorno di una voce: `date` è toLocaleDateString('it-IT') ("02/11/2026") e come stringa non
+		// si ordina (regola #16). `value` = aaaammgg, così "2/11/2026" e "02/11/2026" sono lo stesso
+		// giorno; una data in un altro formato (backup da un altro browser) resta a sé, in fondo al menu.
+		function historyDay(date) {
+			const raw = String(date == null ? '' : date).trim();
+			const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(raw);
+			if (!m) return { value: 'x:' + raw, label: raw || '(senza data)', sort: -1 };
+			const dd = m[1].padStart(2, '0'), mm = m[2].padStart(2, '0');
+			return { value: m[3] + mm + dd, label: `${dd}/${mm}/${m[3]}`, sort: Number(m[3] + mm + dd) };
+		}
+
+		// Minuscole e senza accenti: "Croci ai Cavi" si trova anche con "croci", "Alzàte" con "alzate".
+		function normalizeSearch(s) {
+			return String(s == null ? '' : s).normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+		}
+
+		// Menu dei soli giorni con almeno una voce, dal più recente, col numero di esercizi registrati.
+		// Si ricostruisce da renderHistory() (apertura del tab, svuotamento), non a ogni tasto: la
+		// selezione resta se quel giorno esiste ancora, altrimenti torna "Tutte le date".
+		function populateHistoryDateSelect() {
+			const sel = document.getElementById('history-date-select');
+			if (!sel) return;
+			const prev = sel.value;
+			const days = new Map();
+			db.history.forEach(log => {
+				const d = historyDay(log.date);
+				const cur = days.get(d.value);
+				if (cur) cur.n++;
+				else days.set(d.value, { ...d, n: 1 });
+			});
+			const sorted = [...days.values()].sort((a, b) => b.sort - a.sort);
+			sel.innerHTML = `<option value="">📅 Tutte le date</option>` + sorted.map(d =>
+				`<option value="${esc(d.value)}">${esc(d.label)} (${d.n} ${d.n === 1 ? 'esercizio' : 'esercizi'})</option>`
+			).join('');
+			sel.value = days.has(prev) ? prev : '';
+		}
+
+		function clearHistoryFilters() {
+			const input = document.getElementById('history-search-input');
+			const sel = document.getElementById('history-date-select');
+			if (input) input.value = '';
+			if (sel) sel.value = '';
+			renderHistoryList();
+		}
+
 		function renderHistory() {
 			const container = document.getElementById('history-container');
 			if (!container) return;
+			const box = document.getElementById('history-search-box');
 			if(db.history.length === 0) {
+				// Niente da cercare: si nasconde la ricerca e si azzerano i filtri, così non restano
+				// attivi (e invisibili) quando lo storico torna a riempirsi.
+				if (box) box.classList.add('hidden');
+				const input = document.getElementById('history-search-input');
+				const sel = document.getElementById('history-date-select');
+				if (input) input.value = '';
+				if (sel) sel.innerHTML = '';   // senza opzioni il valore è '', e populate non lo ripristina
 				container.innerHTML = `<p class="text-gray-500 text-center py-4 text-xs">Nessuna serie registrata in questo ciclo.</p>`;
 				return;
 			}
-			container.innerHTML = db.history.slice().reverse().map(log => `
-				<div class="bg-gray-800 p-3 rounded-xl border border-gray-700 text-xs">
-					<div class="flex justify-between border-b border-gray-700 pb-1.5 mb-2">
-						<div>
-							<span class="font-bold text-indigo-400 text-sm">${esc(log.exercise)}</span>
-							<span class="text-gray-400 block text-[10px]">Settimana: ${esc(log.week)}</span>
+			if (box) box.classList.remove('hidden');
+			populateHistoryDateSelect();
+			renderHistoryList();
+		}
+
+		// Elenco filtrato: ogni parola cercata deve comparire nel nome (in qualunque ordine), e il
+		// giorno, se scelto, deve coincidere. Le voci trovate si raggruppano per giorno (vedi sotto).
+		function renderHistoryList() {
+			const container = document.getElementById('history-container');
+			if (!container) return;
+			const input = document.getElementById('history-search-input');
+			const sel = document.getElementById('history-date-select');
+			const terms = normalizeSearch(input ? input.value : '').split(/\s+/).filter(Boolean);
+			const day = sel ? sel.value : '';
+			const filtered = terms.length > 0 || day !== '';
+			const shown = db.history.filter(log => {
+				if (day && historyDay(log.date).value !== day) return false;
+				const name = normalizeSearch(log.exercise);
+				return terms.every(t => name.includes(t));
+			});
+
+			const total = db.history.length;
+			const count = document.getElementById('history-count');
+			if (count) {
+				count.innerText = filtered
+					? `${shown.length} ${shown.length === 1 ? 'voce trovata' : 'voci trovate'} su ${total}`
+					: `${total} ${total === 1 ? 'voce' : 'voci'} in totale`;
+			}
+			const clearBtn = document.getElementById('history-clear-filters');
+			if (clearBtn) clearBtn.classList.toggle('hidden', !filtered);
+
+			if (shown.length === 0) {
+				container.innerHTML = `<p class="text-gray-500 text-center py-4 text-xs">Nessuna voce corrisponde alla ricerca.</p>`;
+				return;
+			}
+			// Un gruppo per giorno, dal più recente (historyDay: "2/11" e "02/11" sono lo stesso giorno),
+			// con data e settimana una volta sola nella testata. Dentro il giorno le voci restano
+			// nell'ordine dell'array, cioè in quello in cui sono state registrate. Niente riquadro per
+			// voce: una barra (border-t) dalla seconda in poi.
+			const groups = new Map();
+			shown.forEach(log => {
+				const d = historyDay(log.date);
+				if (!groups.has(d.value)) groups.set(d.value, { day: d, logs: [] });
+				groups.get(d.value).logs.push(log);
+			});
+			const days = [...groups.values()].sort((a, b) => b.day.sort - a.day.sort);
+			container.innerHTML = days.map(g => {
+				// Più settimane nello stesso giorno (settimana chiusa e nuova iniziata): la testata le
+				// elenca tutte e ogni voce tiene la sua, altrimenti l'informazione andrebbe persa.
+				const weeks = [...new Set(g.logs.map(l => String(l.week == null ? '' : l.week)).filter(w => w !== ''))];
+				const weekLabel = weeks.length === 0 ? '' : weeks.length === 1
+					? `Settimana ${esc(weeks[0])}` : `Settimane ${weeks.map(esc).join(', ')}`;
+				return `
+				<div data-day="${esc(g.day.value)}">
+					<div class="flex justify-between items-center bg-gray-800 rounded-lg px-3 py-1.5">
+						<span class="text-sm font-bold text-white">${esc(g.day.label)}</span>
+						<span class="text-[11px] text-gray-400">${weekLabel}</span>
+					</div>
+					${g.logs.map((log, i) => `
+					<div class="px-1 py-2.5 text-xs ${i > 0 ? 'border-t border-gray-700' : ''}">
+						<span class="font-bold text-indigo-400 text-sm block mb-1">${esc(log.exercise)}</span>
+						${weeks.length > 1 ? `<span class="text-gray-400 block text-[10px] mb-1">Settimana: ${esc(log.week)}</span>` : ''}
+						<div class="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] text-gray-300">
+							${log.sets.map((set, idx) => {
+								// log.measure === 'time' → `reps` sono secondi. Retrocompat: assente = reps.
+								const isT = log.measure === 'time';
+								const qty = isT ? `${esc(set.reps)} sec` : `${esc(set.reps)} rep`;
+								const wt = (set.weight > 0) ? `<strong>${esc(set.weight)}kg</strong> x ` : '';
+								return `<span>Serie ${idx+1}: ${wt}${qty}</span>`;
+							}).join('')}
 						</div>
-						<span class="text-gray-400 font-medium">${esc(log.date)}</span>
-					</div>
-					<div class="grid grid-cols-2 gap-1 text-[11px] text-gray-300">
-						${log.sets.map((set, idx) => {
-							// log.measure === 'time' → `reps` sono secondi. Retrocompat: assente = reps.
-							const isT = log.measure === 'time';
-							const qty = isT ? `${esc(set.reps)} sec` : `${esc(set.reps)} rep`;
-							const wt = (set.weight > 0) ? `<strong>${esc(set.weight)}kg</strong> x ` : '';
-							return `<span>Serie ${idx+1}: ${wt}${qty}</span>`;
-						}).join('')}
-					</div>
-				</div>
-			`).join('');
+					</div>`).join('')}
+				</div>`;
+			}).join('');
 		}
 
 		document.addEventListener('DOMContentLoaded', () => {
