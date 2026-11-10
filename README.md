@@ -101,6 +101,10 @@ I dati vivono nel `localStorage` del browser: **cancellare i dati di navigazione
 
 ## 📝 Changelog
 
+### v1.12.1
+- **Workout più compatto: due riquadri invece di quattro.** *Fase / Settimana*, *Seleziona Giorno* e *Seleziona Esercizio* ora stanno in un riquadro solo, e il **timer di recupero** sta nello stesso riquadro di **Registra Serie**, in alto, separato da una linea sottile. Prima erano quattro riquadri separati, ognuno con i suoi margini. La pagina si accorcia di circa 60 px, quindi all'apertura serve scorrere meno per arrivare a **💾 Salva Serie**. Vale anche per la super serie, il circuito e gli esercizi a tempo.
+- Cambia solo l'aspetto: comandi, timer e registrazione funzionano come prima. Nessuna migrazione dei dati.
+
 ### v1.12.0
 - **Ricerca nello storico.** In *Impostazioni*, sopra l'elenco delle serie registrate, c'è ora il riquadro **📜 Storico Allenamenti**. Prima lo storico era un elenco unico dalla sessione più recente, e per ritrovare un esercizio o un giorno bisognava scorrerlo tutto.
   - **Per esercizio**: scrivi nella casella una parte del nome. Maiuscole e accenti non contano (`alzate` trova *Alzàte Laterali*), e con più parole devono esserci tutte, in qualunque ordine (`manubri panca` trova *Panca Inclinata Manubri*).
